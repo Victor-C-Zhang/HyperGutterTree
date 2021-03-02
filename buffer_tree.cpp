@@ -1,0 +1,7 @@
+#include "buffer_tree.h"
+
+#include <iostream>
+
+void hello() {
+  std::cout << "Hello, World!" << std::endl;
+}
