@@ -49,15 +49,15 @@ add_library(FastBufferTree
 
 add_executable(test
   test/runner.cpp)
-target_link_libraries(tests PRIVATE GTest::gtest)
+target_link_libraries(test PRIVATE GTest::gtest)
 # optimize unless debug
 if (DEFINED ENV{DEBUG})
   message("Disabling optimizations and enabling debug symbols")
-  target_compile_options(tests PRIVATE -g)
+  target_compile_options(test PRIVATE -g)
 else ()
   if("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU")
-    target_compile_options(tests PRIVATE -O3)
+    target_compile_options(test PRIVATE -O3)
   elseif("${CMAKE_CXX_COMPILER_ID}" STREQUAL "MSVC")
-    target_compile_options(tests PRIVATE /O2)
+    target_compile_options(test PRIVATE /O2)
   endif()
 endif ()
