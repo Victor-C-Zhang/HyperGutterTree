@@ -46,3 +46,18 @@ add_library(FastBufferTree
     buffer_control_block.cpp
     include/buffer_control_block.h
     include/update.h sketch_write_manager.cpp include/sketch_write_manager.h include/sketch.h)
+
+add_executable(test
+  test/runner.cpp)
+target_link_libraries(tests PRIVATE GTest::gtest)
+# optimize unless debug
+if (DEFINED ENV{DEBUG})
+  message("Disabling optimizations and enabling debug symbols")
+  target_compile_options(tests PRIVATE -g)
+else ()
+  if("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU")
+    target_compile_options(tests PRIVATE -O3)
+  elseif("${CMAKE_CXX_COMPILER_ID}" STREQUAL "MSVC")
+    target_compile_options(tests PRIVATE /O2)
+  endif()
+endif ()
