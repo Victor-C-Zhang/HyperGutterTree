@@ -2,6 +2,21 @@ cmake_minimum_required(VERSION 3.17)
 project(FastBufferTree)
 
 set(CMAKE_CXX_STANDARD 11)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS ON)
+
+if("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU")
+  message("Adding GNU compiler flags")
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -W -Wall")
+elseif("${CMAKE_CXX_COMPILER_ID}" STREQUAL "MSVC")
+  message("Adding MSVC compiler flags")
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /Wall")
+else()
+  message("${CMAKE_CXX_COMPILER_ID} not recognized, no flags added")
+endif()
+
+message("${CMAKE_MODULE_PATH}")
+include("DownloadProject.cmake")
 
 #Find or download GTest
 find_package(GTest CONFIG)
@@ -46,6 +61,12 @@ add_library(FastBufferTree
     buffer_control_block.cpp
     include/buffer_control_block.h
     include/update.h sketch_write_manager.cpp include/sketch_write_manager.h include/sketch.h)
+target_link_libraries(FastBufferTree PRIVATE GTest::gtest)
+if("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU")
+  target_compile_options(FastBufferTree PRIVATE -O3)
+elseif("${CMAKE_CXX_COMPILER_ID}" STREQUAL "MSVC")
+  target_compile_options(FastBufferTree PRIVATE /O2)
+endif()
 
 add_executable(test
   test/runner.cpp)
