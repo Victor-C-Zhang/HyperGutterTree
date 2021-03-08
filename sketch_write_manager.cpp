@@ -19,7 +19,7 @@ void SketchWriteManager::write_updates(Node sketch_num,
 
 std::string SketchWriteManager::serialize(const update_t &update) {
   // TODO
-  return std::__cxx11::string();
+  return std::string();
 }
 
 update_t SketchWriteManager::deserialize(const std::string &str) {
