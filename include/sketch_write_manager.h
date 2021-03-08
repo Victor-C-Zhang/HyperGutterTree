@@ -19,6 +19,11 @@ class SketchWriteManager {
 private:
   std::mutex* sketch_locks;
   std::queue<Sketch*> write_queue;
+
+  // serializes an update object into a writable string
+  static std::string serialize(const update_t& update);
+  // deserializes a string into an update object
+  static update_t deserialize(const std::string& str);
 public:
   SketchWriteManager();
   ~SketchWriteManager();
