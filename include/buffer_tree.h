@@ -11,7 +11,7 @@
 
 typedef void insert_ret_t;
 typedef void flush_ret_t;
-typedef std::pair<uint32_t, std::vector<std::pair<uint32_t, bool>>> data_ret_t;
+typedef std::pair<Node, std::vector<std::pair<Node, bool>>> data_ret_t;
 
 /*
  * Quick and dirty buffer tree skeleton.
@@ -38,7 +38,7 @@ private:
   uint32_t B;
 
   // number of nodes in the graph
-  uint64_t N;
+  Node N;
 
   // metadata control block(s)
   // level 1 blocks take indices 0->(B-1). So on and so forth from there
@@ -53,7 +53,7 @@ private:
   std::queue<BufferControlBlock*> flush_queue_wild; // level > 2
 
   // utility to handle batching and writing to sketches
-  SketchWriteManager sketchWriteManager;
+  // SketchWriteManager sketchWriteManager;
 
   /*
    * Flushes the buffer:
@@ -101,7 +101,7 @@ public:
    * @param b       branching factor.
    * @param nodes   number of nodes in the graph
    */
-  BufferTree(std::string dir, uint32_t size, uint32_t b, uint64_t nodes);
+  BufferTree(std::string dir, uint32_t size, uint32_t b, Node nodes);
   ~BufferTree();
   /**
    * Puts an update into the data structure.
@@ -145,14 +145,14 @@ public:
    * @param location data to pull from
    * @return the key pulled from the data
    */
-  static key_type load_key(char *location);
+  static Node load_key(char *location);
 
-  data_ret_t get_data(uint32_t tag, uint32_t key);
+  data_ret_t get_data(uint32_t tag, Node key);
   /*
    * Size of a page (can vary from machine to machine but usually 4kb)
    */
   uint page_size;
-  static const uint serial_update_size = sizeof(uint32_t) + sizeof(uint32_t) + sizeof(bool);
+  static const uint serial_update_size = sizeof(Node) + sizeof(Node) + sizeof(bool);
 };
 
 class BufferFullError : public std::exception {

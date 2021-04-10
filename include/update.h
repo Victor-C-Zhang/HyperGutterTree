@@ -6,7 +6,8 @@
 #define FASTBUFFERTREE_UPDATE_H
 
 #include <utility>
-typedef std::pair<std::pair<uint32_t,uint32_t>,bool> update_t;
 typedef uint32_t Node;
+typedef std::pair<std::pair<Node,Node>,bool> update_t;
+
 
 #endif //FASTBUFFERTREE_UPDATE_H

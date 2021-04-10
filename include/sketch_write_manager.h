@@ -11,7 +11,6 @@
 #include "update.h"
 #include "sketch.h"
 
-typedef uint64_t Node;
 /**
  * Class to schedule and manage writes to sketches.
  */

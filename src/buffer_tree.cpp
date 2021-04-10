@@ -12,7 +12,7 @@
  * and the number of nodes we will insert(N)
  * We assume that node indices begin at 0 and increase to N-1
  */
-BufferTree::BufferTree(std::string dir, uint32_t size, uint32_t b, uint64_t
+BufferTree::BufferTree(std::string dir, uint32_t size, uint32_t b, Node
 nodes) : dir(dir), M(size), B(b), N(nodes) {
 	page_size = sysconf(_SC_PAGE_SIZE); // works on POSIX systems (alternative is boost)
 	
@@ -79,19 +79,19 @@ BufferTree::~BufferTree() {
 
 // serialize an update to a data location (should only be used for root I think)
 inline void BufferTree::serialize_update(char *dst, update_t src) {
-	uint32_t node1 = src.first.first;
-	uint32_t node2 = src.first.second;
+	Node node1 = src.first.first;
+	Node node2 = src.first.second;
 	bool value = src.second;
 
-	memcpy(dst, &node1, sizeof(uint32_t));
-	memcpy(dst + sizeof(uint32_t), &node2, sizeof(uint32_t));
-	memcpy(dst + sizeof(uint32_t)*2, &value, sizeof(bool));
+	memcpy(dst, &node1, sizeof(Node));
+	memcpy(dst + sizeof(Node), &node2, sizeof(Node));
+	memcpy(dst + sizeof(Node)*2, &value, sizeof(bool));
 }
 
 inline void BufferTree::deserialize_update(char *src, update_t dst) {
-	memcpy(&dst.first.first, src, sizeof(uint32_t));
-	memcpy(&dst.first.second, src + sizeof(uint32_t), sizeof(uint32_t));
-	memcpy(&dst.second, src + sizeof(uint32_t)*2, sizeof(bool));
+	memcpy(&dst.first.first, src, sizeof(Node));
+	memcpy(&dst.first.second, src + sizeof(Node), sizeof(Node));
+	memcpy(&dst.second, src + sizeof(Node)*2, sizeof(bool));
 }
 
 // copy two serailized updates between two locations
@@ -102,9 +102,9 @@ inline void BufferTree::copy_serial(char *src, char *dst) {
 /*
  * Load a key from a given location
  */
-inline key_type BufferTree::load_key(char *location) {
-	key_type key;
-	memcpy(&key, location, sizeof(key_type));
+inline Node BufferTree::load_key(char *location) {
+	Node key;
+	memcpy(&key, location, sizeof(Node));
 	return key;
 }
 
@@ -129,8 +129,8 @@ insert_ret_t BufferTree::insert(update_t upd) {
 /*
  * Helper function which determines which child we should flush to
  */
-inline uint64_t which_child(node_type key, uint64_t total, uint32_t options) {
-	return key / (total / options); // can go in one of options places and there are total things
+inline Node which_child(Node key, Node total, uint32_t options) {
+	return key / (total / options); // can go in one of options children and there are total graph nodes
 }
 
 flush_ret_t BufferTree::flush_root() {
@@ -144,7 +144,7 @@ flush_ret_t BufferTree::flush_root() {
 	// root_lock.lock(); // TODO - we can probably reduce this locking to only the last page
 	char *data = root_node;
 	while (data - root_node < root_position) {
-		uint64_t key = load_key(data);
+		Node key = load_key(data);
 		short child  = which_child(key, N, B);
 		copy_serial(data, flush_positions[child]);
 		flush_positions[child] += serial_update_size;
@@ -178,7 +178,7 @@ flush_ret_t BufferTree::flush_root() {
 
 // load data from buffer memory location so long as the key matches
 // what we expect
-data_ret_t BufferTree::get_data(uint32_t tag, uint32_t key) {
+data_ret_t BufferTree::get_data(uint32_t tag, Node key) {
 	data_ret_t data;
 	data.first = key;
 	uint32_t pos = tag;
@@ -190,7 +190,7 @@ data_ret_t BufferTree::get_data(uint32_t tag, uint32_t key) {
 		update_t upd;
 		deserialize_update(serial_data + pos, upd);
 		if (upd.first.first == key)
-			data.second.push_back(std::pair<uint32_t, bool>(upd.first.second,upd.second));
+			data.second.push_back(std::pair<Node, bool>(upd.first.second,upd.second));
 		else
 			break;
 		pos += serial_update_size;
