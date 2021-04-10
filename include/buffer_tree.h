@@ -5,12 +5,13 @@
 #include <string>
 #include <vector>
 #include <queue>
+#include <mutex>
 #include "update.h"
 #include "buffer_control_block.h"
-#include "sketch_write_manager.h"
 
 typedef void insert_ret_t;
 typedef void flush_ret_t;
+typedef std::pair<uint32_t, std::vector<std::pair<uint32_t, bool>>> data_ret_t;
 
 /*
  * Quick and dirty buffer tree skeleton.
@@ -36,12 +37,20 @@ private:
   // branching factor
   uint32_t B;
 
-  // metadata control block(s)
-  std::vector<BufferControlBlock> buffers;
+  // number of nodes in the graph
+  uint64_t N;
 
-  // TODO: DESIGN: evaluate whether this should be a priority queue or if a
-  //  regular queue will suffice
-  std::queue<BufferControlBlock*> flush_queue;
+  // metadata control block(s)
+  // level 1 blocks take indices 0->(B-1). So on and so forth from there
+  std::vector<BufferControlBlock*> buffers;
+
+  // buffers which we will use when performing flushes
+  char **flush_buffers;
+
+  // check root first then level 1/2 queues and finally a queue of anything else
+  std::queue<BufferControlBlock*> flush_queue1;     // level 1
+  std::queue<BufferControlBlock*> flush_queue2;     // level 2
+  std::queue<BufferControlBlock*> flush_queue_wild; // level > 2
 
   // utility to handle batching and writing to sketches
   SketchWriteManager sketchWriteManager;
@@ -68,6 +77,19 @@ private:
    */
   flush_ret_t flush(BufferControlBlock& buffer);
 
+  /*
+   * root node and functions for handling it
+   */
+  char *root_node;
+  flush_ret_t flush_root();
+  uint root_position;
+  std::mutex root_lock;
+
+  /*
+   * File descriptor of backing file for storage
+   */
+  int backing_store;
+
 public:
   /**
    * Generates a new homebrew buffer tree.
@@ -77,9 +99,9 @@ public:
    *                larger than the branching factor. not guaranteed to be
    *                the true buffer size, which can be between size and 2*size.
    * @param b       branching factor.
-   * @param levels  (optional) number of levels in the tree.
+   * @param nodes   number of nodes in the graph
    */
-  BufferTree(std::string dir, uint32_t size, uint32_t b, uint32_t levels);
+  BufferTree(std::string dir, uint32_t size, uint32_t b, uint64_t nodes);
   ~BufferTree();
   /**
    * Puts an update into the data structure.
@@ -93,8 +115,58 @@ public:
    * @return nothing.
    */
   flush_ret_t force_flush();
+
+  /*
+   * Function to convert an update_t to a char array
+   * @param dst the memory location to put the serialized data
+   * @param src the edge update
+   * @return nothing
+   */
+  void serialize_update(char *dst, update_t src);
+
+  /*
+   * Function to covert char array to update_t
+   * @param src the memory location to load serialized data from
+   * @param dst the edge update to put stuff into
+   * @return nothing
+   */
+  void deserialize_update(char *src, update_t dst);
+ 
+  /*
+   * Copy the serialized data from one location to another
+   * @param src data to copy from
+   * @param dst data to copy to
+   * @return nothing
+   */
+  static void copy_serial(char *src, char *dst);
+
+  /*
+   * Load a key from serialized data
+   * @param location data to pull from
+   * @return the key pulled from the data
+   */
+  static key_type load_key(char *location);
+
+  data_ret_t get_data(uint32_t tag, uint32_t key);
+  /*
+   * Size of a page (can vary from machine to machine but usually 4kb)
+   */
+  uint page_size;
+  static const uint serial_update_size = sizeof(uint32_t) + sizeof(uint32_t) + sizeof(bool);
 };
 
+class BufferFullError : public std::exception {
+private:
+  int id;
+public:
+  BufferFullError(int id) : id(id) {};
+  virtual const char* what() const throw() {
+    if (id == -1)
+      return "Root buffer is full";
+    else
+      return "Non-Root buffer is full";
+  }
+};
 
 
 #endif //FASTBUFFERTREE_BUFFER_TREE_H

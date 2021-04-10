@@ -1,9 +1,12 @@
-cmake_minimum_required(VERSION 3.17)
+cmake_minimum_required(VERSION 3.5)
 project(FastBufferTree)
 
 set(CMAKE_CXX_STANDARD 11)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS ON)
+
+#Uncomment to enable debug
+set(ENV{DEBUG} ON)
 
 if("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU")
   message("Adding GNU compiler flags")
@@ -56,29 +59,41 @@ if(NOT GTest_FOUND)
 endif()
 
 add_library(FastBufferTree
-    buffer_tree.cpp
+    src/buffer_tree.cpp
     include/buffer_tree.h
-    buffer_control_block.cpp
+    src/buffer_control_block.cpp
     include/buffer_control_block.h
-    include/update.h sketch_write_manager.cpp include/sketch_write_manager.h include/sketch.h)
+    include/update.h 
+    src/sketch_write_manager.cpp 
+    include/sketch_write_manager.h 
+    include/sketch.h)
 target_link_libraries(FastBufferTree PRIVATE GTest::gtest)
-if("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU")
-  target_compile_options(FastBufferTree PRIVATE -O3)
-elseif("${CMAKE_CXX_COMPILER_ID}" STREQUAL "MSVC")
-  target_compile_options(FastBufferTree PRIVATE /O2)
-endif()
 
-add_executable(test
-  test/runner.cpp)
-target_link_libraries(test PRIVATE GTest::gtest)
 # optimize unless debug
 if (DEFINED ENV{DEBUG})
   message("Disabling optimizations and enabling debug symbols")
-  target_compile_options(test PRIVATE -g)
+  target_compile_options(FastBufferTree PRIVATE -g)
 else ()
   if("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU")
-    target_compile_options(test PRIVATE -O3)
+    target_compile_options(FastBufferTree PRIVATE -O3)
   elseif("${CMAKE_CXX_COMPILER_ID}" STREQUAL "MSVC")
-    target_compile_options(test PRIVATE /O2)
+    target_compile_options(FastBufferTree PRIVATE /O2)
+endif()
+endif ()
+
+
+add_executable(buffertree_tests
+  test/runner.cpp
+  test/basic_test.cpp)
+target_link_libraries(buffertree_tests PRIVATE GTest::gtest FastBufferTree)
+# optimize unless debug
+if (DEFINED ENV{DEBUG})
+  message("Disabling optimizations and enabling debug symbols")
+  target_compile_options(buffertree_tests PRIVATE -g)
+else ()
+  if("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU")
+    target_compile_options(buffertree_tests PRIVATE -O3)
+  elseif("${CMAKE_CXX_COMPILER_ID}" STREQUAL "MSVC")
+    target_compile_options(buffertree_tests PRIVATE /O2)
   endif()
 endif ()
