@@ -130,7 +130,7 @@ public:
    * @param dst the edge update to put stuff into
    * @return nothing
    */
-  void deserialize_update(char *src, update_t dst);
+  update_t deserialize_update(char *src);
  
   /*
    * Copy the serialized data from one location to another

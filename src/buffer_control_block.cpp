@@ -31,6 +31,6 @@ bool BufferControlBlock::write(char *data, uint32_t size) {
 	if (storage_ptr + size > data_max_size)
 		throw BufferFullError(id);
 	pwrite(f_ext, data, size, file_offset + storage_ptr);
-	storage_ptr += BufferTree::serial_update_size;
+	storage_ptr += size;
 	return needs_flush(size);
 }

@@ -18,28 +18,27 @@ TEST(UtilTestSuite, TestInsertBasic) {
     upd.second = true;
     buf_tree->insert(upd);
   }
+  buf_tree->force_flush();
 
   // query for the 0 key at tag index 0
   data_ret_t ret = buf_tree->get_data(0, 0);
-  uint32_t key = ret.first;
-  std::vector<std::pair<uint32_t, bool>> updates = ret.second;
+  Node key = ret.first;
+  std::vector<std::pair<Node, bool>> updates = ret.second;
   // how many updates to we expect to see to each node
-  int per_node = num_updates / nodes / nodes;
+  int per_node = num_updates / nodes;
 
   ASSERT_EQ(0, key);
 
-  int counts[nodes];
-  for (int i = 0; i < nodes; i++) {
-    counts[nodes] = 0;
-  }
+  int count = 0;
 
-  for (std::pair<uint32_t, bool> upd : updates) {
-    counts[upd.first]++;
+  for (std::pair<Node, bool> upd : updates) {
+    // printf("edge to %d\n", upd.first);
+    ASSERT_EQ(9, upd.first);
+    ASSERT_EQ(true, upd.second);
+    count++;
   }
-
-  for (int i = 0; i < nodes; i++) {
-    ASSERT_EQ(per_node, counts[i]);
-  }
+  ASSERT_EQ(per_node, count);
+  
 
   delete buf_tree;
 }

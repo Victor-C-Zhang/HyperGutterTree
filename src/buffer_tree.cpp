@@ -88,10 +88,13 @@ inline void BufferTree::serialize_update(char *dst, update_t src) {
 	memcpy(dst + sizeof(Node)*2, &value, sizeof(bool));
 }
 
-inline void BufferTree::deserialize_update(char *src, update_t dst) {
+inline update_t BufferTree::deserialize_update(char *src) {
+	update_t dst;
 	memcpy(&dst.first.first, src, sizeof(Node));
 	memcpy(&dst.first.second, src + sizeof(Node), sizeof(Node));
 	memcpy(&dst.second, src + sizeof(Node)*2, sizeof(bool));
+
+	return dst;
 }
 
 // copy two serailized updates between two locations
@@ -184,15 +187,15 @@ data_ret_t BufferTree::get_data(uint32_t tag, Node key) {
 	uint32_t pos = tag;
 
 	char *serial_data = (char *) malloc(2*M);
-	pread(backing_store, serial_data, tag, 2*M);
+	size_t len = pread(backing_store, serial_data, 2*M, tag);
+	printf("read %lu bytes\n", len);
 
-	while(pos - tag < 2*M) {
-		update_t upd;
-		deserialize_update(serial_data + pos, upd);
-		if (upd.first.first == key)
+	while(pos < len) {
+		update_t upd = deserialize_update(serial_data + pos);
+		if (upd.first.first == key && upd.first.second != key) {
+			// printf("query to node %d got edge to node %d\n", key, upd.first.second);
 			data.second.push_back(std::pair<Node, bool>(upd.first.second,upd.second));
-		else
-			break;
+		}
 		pos += serial_update_size;
 	}
 
@@ -207,7 +210,8 @@ flush_ret_t BufferTree::flush(BufferControlBlock &/*buffer*/) {
 //sketchWriteManager.write_updates(if necessary);
 }
 
-flush_ret_t force_flush() {
+flush_ret_t BufferTree::force_flush() {
+	flush_root();
 	// TODO: loop through each of the bufferControlBlocks and flush it
 	// looping from 0 on should force a top to bottom flush (if we do this right)
 }
