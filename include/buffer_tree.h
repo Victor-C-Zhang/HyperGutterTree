@@ -85,11 +85,6 @@ private:
   uint root_position;
   std::mutex root_lock;
 
-  /*
-   * File descriptor of backing file for storage
-   */
-  int backing_store;
-
 public:
   /**
    * Generates a new homebrew buffer tree.
@@ -149,10 +144,18 @@ public:
 
   data_ret_t get_data(uint32_t tag, Node key);
   /*
-   * Size of a page (can vary from machine to machine but usually 4kb)
+   * Static variables which track universal information about the buffer tree which
+   * we would like to be accesible to all the bufferControlBlocks
    */
-  uint page_size;
+  static uint page_size;
   static const uint serial_update_size = sizeof(Node) + sizeof(Node) + sizeof(bool);
+  static uint8_t max_level;
+  static uint32_t max_buffer_size;
+  static uint64_t backing_EOF;
+  /*
+   * File descriptor of backing file for storage
+   */
+  static int backing_store;
 };
 
 class BufferFullError : public std::exception {

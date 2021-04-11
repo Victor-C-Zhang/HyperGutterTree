@@ -27,9 +27,6 @@ private:
   // condition variable to determine if the buffer needs to be flushed
   // std::condition_variable needs_flushing;
 
-  // file descriptor of backing store, less directory information
-  int f_ext;
-
   // how many items are currently in the buffer
   uint32_t storage_ptr;
 
@@ -39,6 +36,8 @@ private:
   // maximum amount of data this buffer can store
   uint32_t data_max_size;
 
+  // this node's level in the tree. 0 is root, 1 is it's children, etc
+  uint8_t level;
   /*
    * Check if this buffer needs a flush
    * @return true if buffer needs a flush and it didn't need it before the most recent write
@@ -51,8 +50,10 @@ public:
   /**
    * Generates metadata and file handle for a new buffer.
    * @param id an integer identifier for the buffer.
+   * @param off the offset into the file at which this buffer's data begins
+   * @param level the level in the tree this buffer resides at
    */
-  BufferControlBlock(buffer_id_t id, int fd, uint32_t off, uint32_t M);
+  BufferControlBlock(buffer_id_t id, uint32_t off, uint8_t level);
 
   /**
    * Lock the buffer for data transfer. Blocks the calling context if the
@@ -81,6 +82,12 @@ public:
    * @return true if buffer needs flush for the first time and false otherwise
    */
   bool write(char * data, uint32_t size);
+
+  /*
+   * Flush the buffer this block controls
+   * @return nothing
+   */
+  void flush();
 };
 
 class BufferNotLockedError : public std::exception {

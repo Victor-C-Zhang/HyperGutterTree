@@ -7,6 +7,16 @@
 #include <errno.h>
 
 /*
+ * Static "global" BufferTree variables
+ */
+uint BufferTree::page_size;
+uint8_t BufferTree::max_level;
+uint32_t BufferTree::max_buffer_size;
+uint64_t BufferTree::backing_EOF;
+int BufferTree::backing_store;
+
+
+/*
  * Constructor
  * Sets up the buffer tree given the storage directory, buffer size, number of children
  * and the number of nodes we will insert(N)
@@ -22,8 +32,12 @@ nodes) : dir(dir), M(size), B(b), N(nodes) {
 		flush_buffers[i] = (char *) malloc(page_size);
 	}
 
+	max_level = 1;
+	max_buffer_size = 2 * M;
+	backing_EOF = max_buffer_size * B; // current maximum size of the backing_store
+
 	// malloc the memory for the root node
-	root_node = (char *) malloc(2 * M);
+	root_node = (char *) malloc(max_buffer_size);
 	root_position = 0;
 
 	// open the file which will be our backing store for the non-root nodes
@@ -40,7 +54,7 @@ nodes) : dir(dir), M(size), B(b), N(nodes) {
 	// allocate space in the file for the level 1 nodes
 	// this should prevent intra-level fragmentation
 	// posix_fallocate(fd, o, n) to allocate space for n bytes at offset o in file fd
-	posix_fallocate(backing_store, 0, 2 * B * M); // on non-linux systems this might be very slow
+	posix_fallocate(backing_store, 0, backing_EOF); // on non-linux systems this might be very slow
 	
 	// will want to use mmap instead? - how much is in RAM after allocation (none?)
 	// can't use mmap instead might use it as well. (Still need to create the file to be a given size)
@@ -50,8 +64,8 @@ nodes) : dir(dir), M(size), B(b), N(nodes) {
 	// create first level of tree buffers.
 	buffers.reserve(B);
 	for (uint i = 0; i < B; i++) {
-		// create a buffer control block of size 2*M at offset 2*M*i in the backing_store
-		BufferControlBlock *bcb = new BufferControlBlock(i, backing_store, 2*M*i, 2*M);
+		// create a buffer control block for a level 1 node at offset max_buffer_size*i in the backing_store
+		BufferControlBlock *bcb = new BufferControlBlock(i, max_buffer_size*i, 1);
 		buffers.push_back(bcb);
 	}
 
@@ -203,11 +217,6 @@ data_ret_t BufferTree::get_data(uint32_t tag, Node key) {
 	// can be reused by future flushes
 
 	return data;
-}
-
-flush_ret_t BufferTree::flush(BufferControlBlock &/*buffer*/) {
-// TODO
-//sketchWriteManager.write_updates(if necessary);
 }
 
 flush_ret_t BufferTree::force_flush() {
