@@ -1,15 +1,15 @@
 #include <gtest/gtest.h>
+#include <stdio.h>
 #include "../include/buffer_tree.h"
 
-#define KB 1024
+#define KB 1 << 10
+#define MB 1 << 20
+#define GB 1 << 30
 
-TEST(UtilTestSuite, TestInsertBasic) {
-  // create a buffer tree with a buffer size of __, a branching factor
-  // of two and based on a graph with 10 unique nodes [0-9]
-  const int nodes = 10;
-  const int num_updates = 400;
-
-  BufferTree *buf_tree = new BufferTree("./test_", KB, 2, nodes);
+// helper function to run a basic test of the buffer tree with
+// various parameters
+void run_test(const int nodes, const int num_updates, const int buffer_size, const int branch_factor) {
+  BufferTree *buf_tree = new BufferTree("./test_", buffer_size, branch_factor, nodes, true);
 
   for (int i = 0; i < num_updates; i++) {
     update_t upd;
@@ -33,12 +33,28 @@ TEST(UtilTestSuite, TestInsertBasic) {
 
   for (std::pair<Node, bool> upd : updates) {
     // printf("edge to %d\n", upd.first);
-    ASSERT_EQ(9, upd.first);
+    ASSERT_EQ(nodes - 1, upd.first);
     ASSERT_EQ(true, upd.second);
     count++;
   }
   ASSERT_EQ(per_node, count);
-  
-
   delete buf_tree;
+}
+
+TEST(UtilTestSuite, TestInsertBasicSmall) {
+  const int nodes = 10;
+  const int num_updates = 400;
+  const int buf = KB;
+  const int branch = 2;
+
+  run_test(nodes, num_updates, buf, branch);
+}
+
+TEST(UtilTestSuite, TestInsertBasicMedium) {
+  const int nodes = 100;
+  const int num_updates = 360000;
+  const int buf = MB;
+  const int branch = 8;
+
+  run_test(nodes, num_updates, buf, branch);
 }

@@ -95,8 +95,9 @@ public:
    *                the true buffer size, which can be between size and 2*size.
    * @param b       branching factor.
    * @param nodes   number of nodes in the graph
+   * @param reset   should truncate the file storage upon opening
    */
-  BufferTree(std::string dir, uint32_t size, uint32_t b, Node nodes);
+  BufferTree(std::string dir, uint32_t size, uint32_t b, Node nodes, bool reset);
   ~BufferTree();
   /**
    * Puts an update into the data structure.

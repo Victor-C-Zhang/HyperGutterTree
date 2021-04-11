@@ -27,7 +27,7 @@ bool BufferControlBlock::busy() {
 
 
 bool BufferControlBlock::write(char *data, uint32_t size) {
-	printf("Writing to buffer %d data pointer = %p with size %i\n", id, data, size);
+	// printf("Writing to buffer %d data pointer = %p with size %i\n", id, data, size);
 	if (storage_ptr + size > data_max_size) {
 		flush();
 		//throw BufferFullError(id);

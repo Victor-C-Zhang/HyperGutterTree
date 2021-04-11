@@ -23,8 +23,12 @@ int BufferTree::backing_store;
  * We assume that node indices begin at 0 and increase to N-1
  */
 BufferTree::BufferTree(std::string dir, uint32_t size, uint32_t b, Node
-nodes) : dir(dir), M(size), B(b), N(nodes) {
+nodes, bool reset=false) : dir(dir), M(size), B(b), N(nodes) {
 	page_size = sysconf(_SC_PAGE_SIZE); // works on POSIX systems (alternative is boost)
+	int file_flags = O_RDWR | O_CREAT | O_DIRECT; // direct memory may or may not be good
+	if (reset) {
+		file_flags |= O_TRUNC;
+	}
 	
 	// malloc the memory for the flush buffers
 	flush_buffers = (char **) malloc(sizeof(char *) * B);
@@ -45,7 +49,7 @@ nodes) : dir(dir), M(size), B(b), N(nodes) {
 	printf("directory = %s\n", dir.c_str());
 	std::string file_name = dir + "buffer_tree_v0.1.data";
 	printf("opening file %s\n", file_name.c_str());
-	backing_store = open(file_name.c_str(), O_RDWR | O_CREAT, S_IRUSR | S_IWUSR); //O_DIRECT ?
+	backing_store = open(file_name.c_str(), file_flags, S_IRUSR | S_IWUSR);
 	if (backing_store == -1) {
 		fprintf(stderr, "Failed to open backing storage file! error=%s\n", strerror(errno));
 		exit(1);
@@ -147,7 +151,7 @@ insert_ret_t BufferTree::insert(update_t upd) {
  * Helper function which determines which child we should flush to
  */
 inline Node which_child(Node key, Node total, uint32_t options) {
-	return key / (total / options); // can go in one of options children and there are total graph nodes
+	return key / (total / (double)options); // can go in one of options children and there are total graph nodes
 }
 
 flush_ret_t BufferTree::flush_root() {
@@ -166,7 +170,7 @@ flush_ret_t BufferTree::flush_root() {
 		copy_serial(data, flush_positions[child]);
 		flush_positions[child] += serial_update_size;
 
-		if (flush_positions[child] - flush_buffers[child] >= M) {
+		if (flush_positions[child] - flush_buffers[child] >= page_size - serial_update_size) {
 			// write to our child, return value indicates if it needs to be flushed
 			uint size = flush_positions[child] - flush_buffers[child];
 			if(buffers[child]->write(flush_buffers[child], size))
