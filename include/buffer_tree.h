@@ -6,6 +6,7 @@
 #include <vector>
 #include <queue>
 #include <mutex>
+#include <math.h>
 #include "update.h"
 #include "buffer_control_block.h"
 
@@ -56,34 +57,24 @@ private:
   // SketchWriteManager sketchWriteManager;
 
   /*
-   * Flushes the buffer:
-   * 0. Checks if the root buffer is busy. If it is, wait until not busy.
-   *    Lock the root.
-   * 1. If the buffer is not stored in memory, read into memory.
-   * 2. If the root is a leaf buffer:
-   *      a. Collate and write_updates().
-   *      b. Unlock the root and RETURN.
-   * 2. Run heavy-hitters algorithm.
-   * 3. write_updates() to heavy hitters, leaving gaps in the buffer where
-   *    the elements were.
-   * 4. Find fixed pivots within buffer to split data on.
-   * 5. Locks children that need to be written to.
-   * 6. File-appends elements to children buffers. Updates storage pointers
-   *    of children. If any children have over M elements, add them to the
-   *    flush queue.
-   * 7. Resets storage pointer of root buffer to 0 and free the auxiliary
-   *    memory used to store the buffer.
-   * 8. Unlock children and root (in that order, please) and RETURN.
-   */
-  flush_ret_t flush(BufferControlBlock& buffer);
-
-  /*
    * root node and functions for handling it
    */
   char *root_node;
   flush_ret_t flush_root();
+  flush_ret_t flush_control_block(BufferControlBlock *bcb);
   uint root_position;
   std::mutex root_lock;
+
+  /*
+   * function which actually carries out the flush. Designed to be
+   * called either upon the root or upon a buffer at any level of the tree
+   * @param data the data to flush
+   * @param begin the smallest id of the node's children
+   * @param num_keys the number of keys which this node is responsible for
+   * @param fq the flush queue to place this node's children in if they need to be flushed
+   * @returns nothing
+   */
+  flush_ret_t do_flush(char *data, uint32_t begin, Node num_keys, std::queue<BufferControlBlock *> fq);
 
 public:
   /**
@@ -111,6 +102,28 @@ public:
    * @return nothing.
    */
   flush_ret_t force_flush();
+
+  /*
+   * Flushes the buffer:
+   * 0. Checks if the root buffer is busy. If it is, wait until not busy.
+   *    Lock the root.
+   * 1. If the buffer is not stored in memory, read into memory.
+   * 2. If the root is a leaf buffer:
+   *      a. Collate and write_updates().
+   *      b. Unlock the root and RETURN.
+   * 2. Run heavy-hitters algorithm.
+   * 3. write_updates() to heavy hitters, leaving gaps in the buffer where
+   *    the elements were.
+   * 4. Find fixed pivots within buffer to split data on.
+   * 5. Locks children that need to be written to.
+   * 6. File-appends elements to children buffers. Updates storage pointers
+   *    of children. If any children have over M elements, add them to the
+   *    flush queue.
+   * 7. Resets storage pointer of root buffer to 0 and free the auxiliary
+   *    memory used to store the buffer.
+   * 8. Unlock children and root (in that order, please) and RETURN.
+   */
+  flush_ret_t flush();
 
   /*
    * Function to convert an update_t to a char array
@@ -142,6 +155,11 @@ public:
    * @return the key pulled from the data
    */
   static Node load_key(char *location);
+
+  /*
+   * Creates the next level of the buffer tree
+   */
+  void next_level();
 
   data_ret_t get_data(uint32_t tag, Node key);
   /*

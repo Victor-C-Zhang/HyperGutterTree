@@ -2,8 +2,8 @@
 
 #include <utility>
 #include <unistd.h> //sysconf
-#include <fcntl.h>  //posix_fallocate
 #include <string.h> //memcpy
+#include <fcntl.h>  //posix_fallocate
 #include <errno.h>
 
 /*
@@ -35,10 +35,11 @@ nodes, bool reset=false) : dir(dir), M(size), B(b), N(nodes) {
 	for (uint i = 0; i < B; i++) {
 		flush_buffers[i] = (char *) malloc(page_size);
 	}
-
-	max_level = 1;
+	
+	// setup static variables
+	max_level       = 0;
 	max_buffer_size = 2 * M;
-	backing_EOF = max_buffer_size * B; // current maximum size of the backing_store
+	backing_EOF     = 0;
 
 	// malloc the memory for the root node
 	root_node = (char *) malloc(max_buffer_size);
@@ -55,23 +56,14 @@ nodes, bool reset=false) : dir(dir), M(size), B(b), N(nodes) {
 		exit(1);
 	}
 
-	// allocate space in the file for the level 1 nodes
-	// this should prevent intra-level fragmentation
-	// posix_fallocate(fd, o, n) to allocate space for n bytes at offset o in file fd
-	posix_fallocate(backing_store, 0, backing_EOF); // on non-linux systems this might be very slow
+	
+	next_level(); // create first level of the tree (root's children)
 	
 	// will want to use mmap instead? - how much is in RAM after allocation (none?)
 	// can't use mmap instead might use it as well. (Still need to create the file to be a given size)
 	// will want to use pwrite/read so that the IOs are thread safe and all threads can share a single file descriptor
 	// if we don't use mmap that is
-
-	// create first level of tree buffers.
-	buffers.reserve(B);
-	for (uint i = 0; i < B; i++) {
-		// create a buffer control block for a level 1 node at offset max_buffer_size*i in the backing_store
-		BufferControlBlock *bcb = new BufferControlBlock(i, max_buffer_size*i, 1);
-		buffers.push_back(bcb);
-	}
+	
 
 	printf("Successfully created buffer tree\n");
 }
@@ -93,6 +85,31 @@ BufferTree::~BufferTree() {
 	}
 
 	close(backing_store);
+}
+
+inline void BufferTree::next_level() {
+    // allocate space in the file for the level 1 nodes
+    // this should prevent intra-level fragmentation
+    // posix_fallocate(fd, o, n) to allocate space for n bytes at offset o in file fd
+    max_level += 1;
+    uint level_size = pow(B, max_level);
+    uint64_t size = max_buffer_size * level_size;
+    posix_fallocate(backing_store, backing_EOF, size); // on non-linux systems this might be very slow
+
+    // printf("level_size = %u size %lu\n", level_size, size);
+    
+    // create new buffer control blocks
+    uint start = buffers.size();
+    buffers.reserve(start + level_size);
+
+    for (uint i = 0; i < level_size; i++) {
+		// create a buffer control block for a this level at offset max_buffer_size*i in the backing_store
+		// printf("Creating buffer control block %i\n", start+i);
+		BufferControlBlock *bcb = new BufferControlBlock(start + i, backing_EOF + max_buffer_size*i, max_level);
+		buffers.push_back(bcb);
+    }
+
+    backing_EOF += size;
 }
 
 // serialize an update to a data location (should only be used for root I think)
@@ -154,27 +171,32 @@ inline Node which_child(Node key, Node total, uint32_t options) {
 	return key / (total / (double)options); // can go in one of options children and there are total graph nodes
 }
 
-flush_ret_t BufferTree::flush_root() {
-	printf("Flushing root\n");
+/*
+ * Function for perfoming a flush anywhere in the tree agnostic to position.
+ * this function should perform correctly so long as the parameters are correct.
+ * 
+ * IMPORTANT: after perfoming the flush it is the caller's responsibility to reset
+ * the number of elements in the buffer and associated pointers.
+ */
+flush_ret_t BufferTree::do_flush(char *data, uint32_t begin, Node num_keys, std::queue<BufferControlBlock *> fq) {
 	// setup
 	char **flush_positions = (char **) malloc(sizeof(char *) * B); // TODO move malloc out of this function
 	for (uint i = 0; i < B; i++) {
 		flush_positions[i] = flush_buffers[i]; // TODO this casting is annoying (just convert everything to update_t type?)
 	}
 
-	// root_lock.lock(); // TODO - we can probably reduce this locking to only the last page
-	char *data = root_node;
 	while (data - root_node < root_position) {
 		Node key = load_key(data);
-		short child  = which_child(key, N, B);
+		short child  = which_child(key, num_keys, B);
 		copy_serial(data, flush_positions[child]);
 		flush_positions[child] += serial_update_size;
 
 		if (flush_positions[child] - flush_buffers[child] >= page_size - serial_update_size) {
 			// write to our child, return value indicates if it needs to be flushed
 			uint size = flush_positions[child] - flush_buffers[child];
-			if(buffers[child]->write(flush_buffers[child], size))
-				flush_queue1.push(buffers[child]);
+			if(buffers[begin+child]->write(flush_buffers[child], size)) {
+				fq.push(buffers[begin+child]);
+			}
 
 			flush_positions[child] = flush_buffers[child]; // reset the flush_position
 		}
@@ -186,15 +208,28 @@ flush_ret_t BufferTree::flush_root() {
 		if (flush_positions[i] - flush_buffers[i] > 0) {
 			// write to child i, return value indicates if it needs to be flushed
 			uint size = flush_positions[i] - flush_buffers[i];
-			if(buffers[i]->write(flush_buffers[i], size))
-				flush_queue1.push(buffers[i]);
+			if(buffers[begin+i]->write(flush_buffers[i], size)) {
+				flush_queue1.push(buffers[begin+i]);
+			}
 		}
 	}
+	free(flush_positions);
+}
 
+flush_ret_t inline BufferTree::flush_root() {
+	printf("Flushing root\n");
+	// root_lock.lock(); // TODO - we can probably reduce this locking to only the last page
+	do_flush(root_node, 0, N, flush_queue1);
 	root_position = 0;
 	// root_lock.unlock();
+}
 
-	free(flush_positions);
+flush_ret_t inline BufferTree::flush_control_block(BufferControlBlock *bcb) {
+	if(max_level == bcb->level) {
+		next_level();
+	}
+
+	//do_flush(root_node, buffers)
 }
 
 // load data from buffer memory location so long as the key matches
@@ -225,6 +260,10 @@ data_ret_t BufferTree::get_data(uint32_t tag, Node key) {
 
 flush_ret_t BufferTree::force_flush() {
 	flush_root();
-	// TODO: loop through each of the bufferControlBlocks and flush it
+	// loop through each of the bufferControlBlocks and flush it
 	// looping from 0 on should force a top to bottom flush (if we do this right)
+	
+	// for (BufferControlBlock blk : buffers) {
+	// 	blk->flush();
+	// }
 }

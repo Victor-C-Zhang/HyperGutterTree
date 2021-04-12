@@ -25,21 +25,18 @@ bool BufferControlBlock::busy() {
 	return true;
 }
 
+inline bool BufferControlBlock::needs_flush(uint32_t size_written) {
+	return storage_ptr > BufferTree::max_buffer_size && 
+		storage_ptr - size_written < BufferTree::max_buffer_size;
+}
+
 
 bool BufferControlBlock::write(char *data, uint32_t size) {
 	// printf("Writing to buffer %d data pointer = %p with size %i\n", id, data, size);
-	if (storage_ptr + size > data_max_size) {
-		flush();
-		//throw BufferFullError(id);
+	if (storage_ptr + size > BufferTree::max_buffer_size) {
+		throw BufferFullError(id);
 	}
 	pwrite(BufferTree::backing_store, data, size, file_offset + storage_ptr);
 	storage_ptr += size;
 	return needs_flush(size);
-}
-
-void BufferControlBlock::flush() {
-	// check if this block is in the lowest level of the tree so far
-	if (level == BufferTree::max_level) {
-
-	}
 }

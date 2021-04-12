@@ -33,20 +33,16 @@ private:
   // where in the file is our data stored
   uint32_t file_offset;
 
-  // maximum amount of data this buffer can store
-  uint32_t data_max_size;
-
-  // this node's level in the tree. 0 is root, 1 is it's children, etc
-  uint8_t level;
   /*
    * Check if this buffer needs a flush
    * @return true if buffer needs a flush and it didn't need it before the most recent write
    */
-  inline bool needs_flush(uint32_t size_written) {
-    return storage_ptr > data_max_size && storage_ptr - size_written < data_max_size;
-  }
+  bool needs_flush(uint32_t size);
 
 public:
+  // this node's level in the tree. 0 is root, 1 is it's children, etc
+  uint8_t level;
+  
   /**
    * Generates metadata and file handle for a new buffer.
    * @param id an integer identifier for the buffer.

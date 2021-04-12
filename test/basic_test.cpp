@@ -1,5 +1,4 @@
 #include <gtest/gtest.h>
-#include <stdio.h>
 #include "../include/buffer_tree.h"
 
 #define KB 1 << 10
@@ -8,6 +7,8 @@
 
 // helper function to run a basic test of the buffer tree with
 // various parameters
+// this test only works if the depth of the tree does not exceed 1
+// and no work is claimed off of the work queue
 void run_test(const int nodes, const int num_updates, const int buffer_size, const int branch_factor) {
   BufferTree *buf_tree = new BufferTree("./test_", buffer_size, branch_factor, nodes, true);
 
