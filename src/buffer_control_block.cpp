@@ -6,6 +6,8 @@
 #include "../include/buffer_tree.h"
 
 #include <unistd.h>
+#include <errno.h>
+#include <string.h>
 
 BufferControlBlock::BufferControlBlock(buffer_id_t id, uint32_t off, uint8_t level)
   : id(id), file_offset(off), level(level){
@@ -39,7 +41,11 @@ bool BufferControlBlock::write(char *data, uint32_t size) {
 	}
 
 
-	pwrite(BufferTree::backing_store, data, size, file_offset + storage_ptr);
+	int len = pwrite(BufferTree::backing_store, data, size, file_offset + storage_ptr);
+	if (len == -1) {
+		printf("ERROR: write to buffer %i failed %s\n", id, strerror(errno));
+	}
+
 	storage_ptr += size; // some null bytes at end
 
 	// return if this buffer should be added to the flush queue

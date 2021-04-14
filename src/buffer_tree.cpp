@@ -310,7 +310,12 @@ flush_ret_t inline BufferTree::flush_control_block(BufferControlBlock *bcb) {
 	// printf("flushing "); bcb->print();
 
 	char *data = (char *) malloc(max_buffer_size); // TODO malloc only once instead of per call
-	size_t len = pread(backing_store, data, max_buffer_size, bcb->offset());
+	int len = pread(backing_store, data, max_buffer_size, bcb->offset());
+	if (len == -1) {
+		printf("ERROR flush failed to read from buffer %i, %s\n", bcb->get_id(), strerror(errno));
+		return;
+	}
+
 	// printf("read %lu bytes\n", len);
 
 	do_flush(data, bcb->size(), bcb->first_child, bcb->min_key, bcb->max_key, bcb->children_num, flush_queue_wild);
@@ -337,8 +342,12 @@ data_ret_t BufferTree::get_data(work_t task) {
 	// printf("getting data from positon %u and for key %u\n", task.second, key);
 
 	char *serial_data = (char *) malloc(bcb->size());
-	size_t len = pread(backing_store, serial_data, bcb->size(), bcb->offset());
+	int len = pread(backing_store, serial_data, bcb->size(), bcb->offset());
 	// printf("read %lu bytes\n", len);
+	if (len == -1) {
+		printf("ERROR get_data failed to read from buffer %i, %s\n", bcb->get_id(), strerror(errno));
+		return data;
+	}
 
 	while(off < len) {
 		update_t upd = deserialize_update(serial_data + off);
