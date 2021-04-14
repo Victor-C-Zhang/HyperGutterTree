@@ -26,7 +26,7 @@ int BufferTree::backing_store;
 BufferTree::BufferTree(std::string dir, uint32_t size, uint32_t b, Node
 nodes, bool reset=false) : dir(dir), M(size), B(b), N(nodes) {
 	page_size = sysconf(_SC_PAGE_SIZE); // works on POSIX systems (alternative is boost)
-	int file_flags = O_RDWR | O_CREAT | O_DIRECT; // direct memory may or may not be good
+	int file_flags = O_RDWR | O_CREAT; // direct memory O_DIRECT may or may not be good
 	if (reset) {
 		file_flags |= O_TRUNC;
 	}
@@ -152,7 +152,7 @@ void BufferTree::setup_tree() {
     #endif
     
     backing_EOF = size;
-    // print_tree(buffers);
+    print_tree(buffers);
 }
 
 // serialize an update to a data location (should only be used for root I think)
@@ -286,7 +286,7 @@ flush_ret_t BufferTree::do_flush(char *data, uint32_t data_size, uint32_t begin,
 }
 
 flush_ret_t inline BufferTree::flush_root() {
-	// printf("Flushing root\n");
+	printf("Flushing root\n");
 	// root_lock.lock(); // TODO - we can probably reduce this locking to only the last page
 	do_flush(root_node, root_position, 0, 0, N-1, B, flush_queue1);
 	root_position = 0;
@@ -307,7 +307,7 @@ flush_ret_t inline BufferTree::flush_control_block(BufferControlBlock *bcb) {
 		return;
 	}
 
-	// printf("flushing "); bcb->print();
+	printf("flushing "); bcb->print();
 
 	char *data = (char *) malloc(max_buffer_size); // TODO malloc only once instead of per call
 	int len = pread(backing_store, data, max_buffer_size, bcb->offset());
