@@ -42,8 +42,16 @@ bool BufferControlBlock::write(char *data, uint32_t size) {
 
 
 	int len = pwrite(BufferTree::backing_store, data, size, file_offset + storage_ptr);
-	if (len == -1) {
-		printf("ERROR: write to buffer %i failed %s\n", id, strerror(errno));
+	if (len == -1 || len != size) {
+		// try one more time
+		len = pwrite(BufferTree::backing_store, data, size, file_offset + storage_ptr);
+		if (len == -1) {
+			printf("ERROR: write to buffer %i failed %s\n", id, strerror(errno));
+			return false;
+		}
+		if (len != size) {
+			printf("WARNING: written size not equal to expended in buffer %i\n", id);
+		}
 	}
 
 	storage_ptr += size; // some null bytes at end
