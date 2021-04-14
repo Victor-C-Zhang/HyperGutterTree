@@ -6,7 +6,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS ON)
 
 #Uncomment to enable debug
-set(ENV{DEBUG} ON)
+#set(ENV{DEBUG} ON)
 
 if("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU")
   message("Adding GNU compiler flags")
@@ -101,3 +101,20 @@ else ()
     target_compile_options(buffertree_tests PRIVATE /O2)
   endif()
 endif ()
+
+add_executable(buffer_experiment
+  experiment/runner.cpp
+  experiment/experiment.cpp)
+target_link_libraries(buffer_experiment PRIVATE GTest::gtest FastBufferTree)
+# optimize unless debug
+if (DEFINED ENV{DEBUG})
+  message("Disabling optimizations and enabling debug symbols")
+  target_compile_options(buffer_experiment PRIVATE -g)
+else ()
+  if("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU")
+    target_compile_options(buffer_experiment PRIVATE -O3)
+  elseif("${CMAKE_CXX_COMPILER_ID}" STREQUAL "MSVC")
+    target_compile_options(buffer_experiment PRIVATE /O2)
+  endif()
+endif ()
+
