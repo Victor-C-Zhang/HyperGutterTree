@@ -68,7 +68,6 @@ add_library(FastBufferTree
     include/sketch_write_manager.h 
     include/sketch.h)
 target_link_libraries(FastBufferTree PRIVATE GTest::gtest)
-
 # optimize unless debug
 if (DEFINED ENV{DEBUG})
   message("Disabling optimizations and enabling debug symbols")
@@ -79,6 +78,11 @@ else ()
   elseif("${CMAKE_CXX_COMPILER_ID}" STREQUAL "MSVC")
     target_compile_options(FastBufferTree PRIVATE /O2)
 endif()
+endif()
+# are we running in linux?
+if (UNIX AND NOT APPLE)
+  message("Enabling Fallocate for a linux system")
+  target_compile_options(FastBufferTree PRIVATE -DHAVE_FALLOCATE)
 endif ()
 
 

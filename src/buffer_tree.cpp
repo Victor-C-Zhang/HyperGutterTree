@@ -12,6 +12,7 @@
 uint BufferTree::page_size;
 uint8_t BufferTree::max_level;
 uint32_t BufferTree::max_buffer_size;
+uint32_t BufferTree::buffer_size;
 uint64_t BufferTree::backing_EOF;
 int BufferTree::backing_store;
 
@@ -29,15 +30,21 @@ nodes, bool reset=false) : dir(dir), M(size), B(b), N(nodes) {
 	if (reset) {
 		file_flags |= O_TRUNC;
 	}
+
+	if (M < page_size) {
+		printf("WARNING: requested buffer size smaller than page_size. Set to page_size.\n");
+		M = page_size;
+	}
 	
 	// malloc the memory for the flush buffers
 	flush_buffers = (char **) malloc(sizeof(char *) * B);
 	for (uint i = 0; i < B; i++) {
-		flush_buffers[i] = (char *) malloc(page_size);
+		flush_buffers[i] = (char *) calloc(page_size, sizeof(char *));
 	}
 	
 	// setup static variables
 	max_level       = 0;
+	buffer_size     = M; // probably figure out a better solution than this
 	max_buffer_size = 2 * M;
 	backing_EOF     = 0;
 
@@ -47,7 +54,6 @@ nodes, bool reset=false) : dir(dir), M(size), B(b), N(nodes) {
 
 	// open the file which will be our backing store for the non-root nodes
 	// create it if it does not already exist
-	printf("directory = %s\n", dir.c_str());
 	std::string file_name = dir + "buffer_tree_v0.1.data";
 	printf("opening file %s\n", file_name.c_str());
 	backing_store = open(file_name.c_str(), file_flags, S_IRUSR | S_IWUSR);
@@ -56,16 +62,14 @@ nodes, bool reset=false) : dir(dir), M(size), B(b), N(nodes) {
 		exit(1);
 	}
 
-	
-	next_level(); // create first level of the tree (root's children)
+	setup_tree(); // setup the buffer tree
 	
 	// will want to use mmap instead? - how much is in RAM after allocation (none?)
 	// can't use mmap instead might use it as well. (Still need to create the file to be a given size)
 	// will want to use pwrite/read so that the IOs are thread safe and all threads can share a single file descriptor
 	// if we don't use mmap that is
-	
 
-	printf("Successfully created buffer tree\n");
+	// printf("Successfully created buffer tree\n");
 }
 
 BufferTree::~BufferTree() {
@@ -87,29 +91,68 @@ BufferTree::~BufferTree() {
 	close(backing_store);
 }
 
-inline void BufferTree::next_level() {
-    // allocate space in the file for the level 1 nodes
-    // this should prevent intra-level fragmentation
-    // posix_fallocate(fd, o, n) to allocate space for n bytes at offset o in file fd
-    max_level += 1;
-    uint level_size = pow(B, max_level);
-    uint64_t size = max_buffer_size * level_size;
-    posix_fallocate(backing_store, backing_EOF, size); // on non-linux systems this might be very slow
+void print_tree(std::vector<BufferControlBlock *>bcb_list) {
+	for(uint i = 0; i < bcb_list.size(); i++) {
+		if (bcb_list[i] != nullptr) 
+			bcb_list[i]->print();
+	}
+}
 
-    // printf("level_size = %u size %lu\n", level_size, size);
+// TODO: clean up this function
+void BufferTree::setup_tree() {
+	max_level = ceil(log(N) / log(B));
+	printf("Creating a tree of depth %i\n", max_level);
+	uint64_t size = 0;
+
+	// create the BufferControlBlocks
+	for (uint l = 1; l <= max_level; l++) {
+		uint level_size  = pow(B, l); // number of blocks in this level
+		uint plevel_size = pow(B, l-1);
+		uint start = buffers.size();
+		buffers.reserve(start + level_size);
+		Node key = 0;
+		double parent_keys = N;
+		uint options = B;
+		bool skip = false;
+		uint prev = 0;
+		uint index = 0;
+		for (uint i = 0; i < level_size; i++) {
+			// get the parent of this node if not level 1 and if we have a new parent
+			if (l > 1 && (i-start) % B == 0) {
+				prev = start + i/B - plevel_size; // this logic should check out because only the last level is ever not full
+				parent_keys = buffers[prev]->max_key - buffers[prev]->min_key + 1;
+				key = buffers[prev]->min_key;
+				options = B;
+				skip = (parent_keys == 1)? true : false;
+			}
+			if (skip || parent_keys == 0) {
+				continue;
+			}
+
+			BufferControlBlock *bcb = new BufferControlBlock(start + index, size + max_buffer_size*index, l);
+	 		bcb->min_key     = key;
+	 		key              += ceil(parent_keys/options);
+			bcb->max_key     = key - 1;
+			if (l != 1)
+				buffers[prev]->add_child(start + index);
+			
+			parent_keys -= ceil(parent_keys/options);
+			options--;
+			buffers.push_back(bcb);
+			index++; // seperate variable because sometimes we skip stuff
+		}
+		size += max_buffer_size * index;
+	}
+
+    // allocate file space for all the nodes to prevent fragmentation
+    #ifdef HAVE_FALLOCATE
+	fallocate(backing_store, 0, 0, size); // linux only but fast
+	#else
+	posix_fallocate(backing_store, 0, size); // portable but much slower
+    #endif
     
-    // create new buffer control blocks
-    uint start = buffers.size();
-    buffers.reserve(start + level_size);
-
-    for (uint i = 0; i < level_size; i++) {
-		// create a buffer control block for a this level at offset max_buffer_size*i in the backing_store
-		// printf("Creating buffer control block %i\n", start+i);
-		BufferControlBlock *bcb = new BufferControlBlock(start + i, backing_EOF + max_buffer_size*i, max_level);
-		buffers.push_back(bcb);
-    }
-
-    backing_EOF += size;
+    backing_EOF = size;
+    // print_tree(buffers);
 }
 
 // serialize an update to a data location (should only be used for root I think)
@@ -167,8 +210,17 @@ insert_ret_t BufferTree::insert(update_t upd) {
 /*
  * Helper function which determines which child we should flush to
  */
-inline Node which_child(Node key, Node total, uint32_t options) {
-	return key / (total / (double)options); // can go in one of options children and there are total graph nodes
+inline uint32_t which_child(Node key, Node min_key, Node max_key, uint8_t options) {
+	Node total = max_key - min_key + 1;
+	double div = (double)total / options;
+	uint larger_kids = total % options;
+	uint larger_count = larger_kids * ceil(div);
+	Node idx = key - min_key;
+
+	if (idx >= larger_count)
+		return ((idx - larger_count) / (int)div) + larger_kids;
+	else
+		return idx / ceil(div);
 }
 
 /*
@@ -177,21 +229,38 @@ inline Node which_child(Node key, Node total, uint32_t options) {
  * 
  * IMPORTANT: after perfoming the flush it is the caller's responsibility to reset
  * the number of elements in the buffer and associated pointers.
+ *
+ * IMPORTANT: Unless we add more flush_buffers only a single flush may occur at once
+ * otherwise the data will clash
  */
-flush_ret_t BufferTree::do_flush(char *data, uint32_t begin, Node num_keys, std::queue<BufferControlBlock *> fq) {
+flush_ret_t BufferTree::do_flush(char *data, uint32_t data_size, uint32_t begin, Node min_key, Node max_key, uint8_t options, std::queue<BufferControlBlock *> &fq) {
 	// setup
+	uint32_t full_flush = page_size - (page_size % serial_update_size);
+
+	char *data_start = data;
 	char **flush_positions = (char **) malloc(sizeof(char *) * B); // TODO move malloc out of this function
 	for (uint i = 0; i < B; i++) {
 		flush_positions[i] = flush_buffers[i]; // TODO this casting is annoying (just convert everything to update_t type?)
 	}
 
-	while (data - root_node < root_position) {
+	while (data - data_start < data_size) {
 		Node key = load_key(data);
-		short child  = which_child(key, num_keys, B);
+		uint32_t child  = which_child(key, min_key, max_key, options);
+		if (child > B - 1) {
+			printf("ERROR: incorrect child %u abandoning insert key=%u min=%u max=%u\n", child, key, min_key, max_key);
+			data += serial_update_size;
+			continue;
+		}
+		if (buffers[child+begin]->min_key > key || buffers[child+begin]->max_key < key) {
+			printf("ERROR: bad key %u for child %u, child min = %u, max = %u abandoning insert\n", key, child, buffers[child+begin]->min_key, buffers[child+begin]->max_key);
+			data += serial_update_size;
+			continue;
+		}
+ 
 		copy_serial(data, flush_positions[child]);
 		flush_positions[child] += serial_update_size;
 
-		if (flush_positions[child] - flush_buffers[child] >= page_size - serial_update_size) {
+		if (flush_positions[child] - flush_buffers[child] >= full_flush) {
 			// write to our child, return value indicates if it needs to be flushed
 			uint size = flush_positions[child] - flush_buffers[child];
 			if(buffers[begin+child]->write(flush_buffers[child], size)) {
@@ -209,7 +278,7 @@ flush_ret_t BufferTree::do_flush(char *data, uint32_t begin, Node num_keys, std:
 			// write to child i, return value indicates if it needs to be flushed
 			uint size = flush_positions[i] - flush_buffers[i];
 			if(buffers[begin+i]->write(flush_buffers[i], size)) {
-				flush_queue1.push(buffers[begin+i]);
+				fq.push(buffers[begin+i]);
 			}
 		}
 	}
@@ -217,53 +286,96 @@ flush_ret_t BufferTree::do_flush(char *data, uint32_t begin, Node num_keys, std:
 }
 
 flush_ret_t inline BufferTree::flush_root() {
-	printf("Flushing root\n");
+	// printf("Flushing root\n");
 	// root_lock.lock(); // TODO - we can probably reduce this locking to only the last page
-	do_flush(root_node, 0, N, flush_queue1);
+	do_flush(root_node, root_position, 0, 0, N-1, B, flush_queue1);
 	root_position = 0;
 	// root_lock.unlock();
+
+	while (!flush_queue1.empty()) { // REMOVE later ... synchronous approach
+		BufferControlBlock *to_flush = flush_queue1.front();
+		flush_queue1.pop();
+		flush_control_block(to_flush);
+	}
+
 }
 
 flush_ret_t inline BufferTree::flush_control_block(BufferControlBlock *bcb) {
-	if(max_level == bcb->level) {
-		next_level();
+	if (bcb->min_key == bcb->max_key) {
+		// printf("adding key %i from buffer %i to work queue\n", bcb->min_key, bcb->get_id());
+		work_queue.push(bcb->work_info());
+		return;
 	}
 
-	//do_flush(root_node, buffers)
+	// printf("flushing "); bcb->print();
+
+	char *data = (char *) malloc(max_buffer_size); // TODO malloc only once instead of per call
+	size_t len = pread(backing_store, data, max_buffer_size, bcb->offset());
+	// printf("read %lu bytes\n", len);
+
+	do_flush(data, bcb->size(), bcb->first_child, bcb->min_key, bcb->max_key, bcb->children_num, flush_queue_wild);
+	bcb->reset();
+
+	free(data);
+
+	while (!flush_queue_wild.empty()) { // REMOVE later ... synchronous approach
+		BufferControlBlock *to_flush = flush_queue_wild.front();
+		flush_queue_wild.pop();
+		flush_control_block(to_flush);
+	}
 }
 
 // load data from buffer memory location so long as the key matches
 // what we expect
-data_ret_t BufferTree::get_data(uint32_t tag, Node key) {
+data_ret_t BufferTree::get_data(work_t task) {
 	data_ret_t data;
+	Node key = task.first;
 	data.first = key;
-	uint32_t pos = tag;
+	File_Pointer off = 0;
+	BufferControlBlock *bcb = buffers[task.second];
 
-	char *serial_data = (char *) malloc(2*M);
-	size_t len = pread(backing_store, serial_data, 2*M, tag);
-	printf("read %lu bytes\n", len);
+	// printf("getting data from positon %u and for key %u\n", task.second, key);
 
-	while(pos < len) {
-		update_t upd = deserialize_update(serial_data + pos);
-		if (upd.first.first == key && upd.first.second != key) {
+	char *serial_data = (char *) malloc(bcb->size());
+	size_t len = pread(backing_store, serial_data, bcb->size(), bcb->offset());
+	// printf("read %lu bytes\n", len);
+
+	while(off < len) {
+		update_t upd = deserialize_update(serial_data + off);
+		// printf("got update: %u %u %i\n", upd.first.first, upd.first.second, upd.second);
+		if (upd.first.first == 0 && upd.first.second == 0) {
+			break; // got a null entry so clear that out
+		}
+
+		if (upd.first.first == key) {
 			// printf("query to node %d got edge to node %d\n", key, upd.first.second);
 			data.second.push_back(std::pair<Node, bool>(upd.first.second,upd.second));
 		}
-		pos += serial_update_size;
+		off += serial_update_size;
 	}
 
-	// TODO we need some way of marking this data as cleared so that this space
-	// can be reused by future flushes
+	free(serial_data);
+
+	// reset the BufferControlBlock (we have emptied it of data)
+	bcb->reset();
 
 	return data;
 }
 
 flush_ret_t BufferTree::force_flush() {
+	// printf("Force flush\n");
 	flush_root();
 	// loop through each of the bufferControlBlocks and flush it
 	// looping from 0 on should force a top to bottom flush (if we do this right)
 	
-	// for (BufferControlBlock blk : buffers) {
-	// 	blk->flush();
-	// }
+	for (BufferControlBlock *bcb : buffers) {
+		if (bcb != nullptr) {
+			if (bcb->min_key == bcb->max_key) {
+				// printf("Flushing key %i from buffer %i to work queue\n", bcb->min_key, bcb->get_id());
+				work_queue.push(bcb->work_info());
+			} else {
+				flush_control_block(bcb);
+			}
+		}
+	}
 }

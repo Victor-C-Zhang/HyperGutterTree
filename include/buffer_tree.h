@@ -48,10 +48,9 @@ private:
   // buffers which we will use when performing flushes
   char **flush_buffers;
 
-  // check root first then level 1/2 queues and finally a queue of anything else
+  // check root first then level 1 queue and finally a queue of anything else
   std::queue<BufferControlBlock*> flush_queue1;     // level 1
-  std::queue<BufferControlBlock*> flush_queue2;     // level 2
-  std::queue<BufferControlBlock*> flush_queue_wild; // level > 2
+  std::queue<BufferControlBlock*> flush_queue_wild; // level > 1
 
   // utility to handle batching and writing to sketches
   // SketchWriteManager sketchWriteManager;
@@ -68,13 +67,16 @@ private:
   /*
    * function which actually carries out the flush. Designed to be
    * called either upon the root or upon a buffer at any level of the tree
-   * @param data the data to flush
-   * @param begin the smallest id of the node's children
-   * @param num_keys the number of keys which this node is responsible for
-   * @param fq the flush queue to place this node's children in if they need to be flushed
+   * @param data        the data to flush
+   * @param size        the size of the data in bytes
+   * @param begin       the smallest id of the node's children
+   * @param min_key     the smalleset key this node is responsible for
+   * @param max_key     the largest key this node is responsible for
+   * @param options     the number of children this node has
+   * @param fq          the flush queue to place this node's children in if they need to be flushed
    * @returns nothing
    */
-  flush_ret_t do_flush(char *data, uint32_t begin, Node num_keys, std::queue<BufferControlBlock *> fq);
+  flush_ret_t do_flush(char *data, uint32_t size, uint32_t begin, Node min_key, Node max_key, uint8_t options, std::queue<BufferControlBlock *> &fq);
 
 public:
   /**
@@ -157,11 +159,13 @@ public:
   static Node load_key(char *location);
 
   /*
-   * Creates the next level of the buffer tree
+   * Creates the entire buffer tree to produce a tree of depth log_B(N)
    */
-  void next_level();
+  void setup_tree();
 
-  data_ret_t get_data(uint32_t tag, Node key);
+  data_ret_t get_data(work_t task);
+
+  std::queue<work_t> work_queue;
   /*
    * Static variables which track universal information about the buffer tree which
    * we would like to be accesible to all the bufferControlBlocks
@@ -170,6 +174,7 @@ public:
   static const uint serial_update_size = sizeof(Node) + sizeof(Node) + sizeof(bool);
   static uint8_t max_level;
   static uint32_t max_buffer_size;
+  static uint32_t buffer_size;
   static uint64_t backing_EOF;
   /*
    * File descriptor of backing file for storage

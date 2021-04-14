@@ -10,8 +10,11 @@
 #include <string>
 #include <mutex>
 #include <condition_variable>
+#include "update.h"
 
 typedef uint32_t buffer_id_t;
+typedef uint32_t File_Pointer;
+typedef std::pair<Node, buffer_id_t> work_t;
 
 /**
  * Buffer metadata class. Care should be taken to synchronize access to the
@@ -20,7 +23,6 @@ typedef uint32_t buffer_id_t;
 class BufferControlBlock {
 private:
   buffer_id_t id;
-
   // busy lock
   std::mutex mtx;
 
@@ -28,10 +30,10 @@ private:
   // std::condition_variable needs_flushing;
 
   // how many items are currently in the buffer
-  uint32_t storage_ptr;
+  File_Pointer storage_ptr;
 
   // where in the file is our data stored
-  uint32_t file_offset;
+  File_Pointer file_offset;
 
   /*
    * Check if this buffer needs a flush
@@ -42,7 +44,15 @@ private:
 public:
   // this node's level in the tree. 0 is root, 1 is it's children, etc
   uint8_t level;
-  
+
+  // the index in the buffers array of this buffer's smallest child
+  buffer_id_t first_child = 0;
+  uint8_t children_num = 0;     // and the number of children
+
+  // information about what keys this node will store
+  Node min_key;
+  Node max_key;
+
   /**
    * Generates metadata and file handle for a new buffer.
    * @param id an integer identifier for the buffer.
@@ -84,6 +94,21 @@ public:
    * @return nothing
    */
   void flush();
+
+  inline void reset() {storage_ptr = 0;}
+  inline buffer_id_t get_id() {return id;}
+  inline work_t work_info() {return work_t(min_key, id);}
+  inline File_Pointer size() {return storage_ptr;}
+  inline File_Pointer offset() {return file_offset;}
+  inline void add_child(buffer_id_t child) {
+    children_num++;
+    first_child = (first_child == 0)? child : first_child;
+  }
+
+  inline void print() {
+    printf("buffer %u: storage_ptr = %u, offset = %u, min_key=%u, max_key=%u, first_child=%u, #children=%u\n", 
+      id, storage_ptr, file_offset, min_key, max_key, first_child, children_num);
+  }
 };
 
 class BufferNotLockedError : public std::exception {
