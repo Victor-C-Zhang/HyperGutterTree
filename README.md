@@ -28,7 +28,7 @@ A flush of a leaf node is simply accomplished by adding a 'tag' to the data in q
 
 
 ## BufferControlBlock
-Encodes the meta-data associated with a block including its `file_offset` and `storage_ptr`. These two attributes represent the location of a node within the large and physically contiguous `backing_store` file. The levels of the tree are stored in the file following a breadth first search. Therefore each level is contiguous.
+Encodes the meta-data associated with a block including its `file_offset` and `storage_ptr`. These two attributes represent the location of a node within the large and physically contiguous `backing_store` file. The nodes of the tree are stored in the file following a breadth first search. Specifically, the data stored within the buffer at each node is what is held within the file. Therefore the data in each level is contiguous on disk.
 
 Example:  
 ```
