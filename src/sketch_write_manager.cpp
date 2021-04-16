@@ -2,7 +2,7 @@
 // Created by victor on 3/2/21.
 //
 
-#include "include/sketch_write_manager.h"
+#include "../include/sketch_write_manager.h"
 
 SketchWriteManager::SketchWriteManager() {
 // TODO
