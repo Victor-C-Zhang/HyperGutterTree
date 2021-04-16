@@ -10,11 +10,11 @@ This class specifies most of the meta-data and functions for handling a buffer t
 Tree includes parameters `M` the size of a buffer, `B` the branching factor, and finally `N` the number of graph node ids we expect to ingest.
 
 ```
-                   root
-           /        |      \
-       node         node    node
-    /   |   \       /   \     |   \
-node  node  node  node node  node  node
+           ---root---
+         /      |     \
+     node       node    node
+   /  |  \       |  \     |  \
+node node node node node node node
 ```
 
 Each of these nodes contains a buffer of size 2M and has B children. We construct the tree so that there is a unique node mapping to each of the `N` graph nodes. In the above example B is 3 and N is 7. The bottom level would be full if N equal to 3^2=9.
@@ -32,14 +32,14 @@ Encodes the meta-data associated with a block including its `file_offset` and `s
 
 Example:  
 ```
------------------------------------------------
-Node 1| Node 2| Node 3| Node 4| Node 5| Node 6|
------------------------------------------------
+------------------------------------------------
+|Node 1| Node 2| Node 3| Node 4| Node 5| Node 6|
+------------------------------------------------
 ```
 
 This buffer encodes the following tree with `B=2` and `N=4`
 ```
-         root
+      ---root---
        /      \      
    node1      node2    
     /  \       /  \  
