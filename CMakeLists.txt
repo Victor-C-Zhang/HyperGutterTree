@@ -4,6 +4,7 @@ project(FastBufferTree)
 set(CMAKE_CXX_STANDARD 11)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS ON)
+set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${PROJECT_BINARY_DIR}/lib)
 
 #Uncomment to enable debug
 #set(ENV{DEBUG} ON)
@@ -84,6 +85,7 @@ if (UNIX AND NOT APPLE)
   message("Enabling Fallocate for a linux system")
   target_compile_options(FastBufferTree PRIVATE -DHAVE_FALLOCATE)
 endif ()
+set_target_properties(FastBufferTree PROPERTIES PUBLIC_HEADER include/buffer_tree.h)
 
 
 add_executable(buffertree_tests
@@ -118,3 +120,13 @@ else ()
   endif()
 endif ()
 
+
+#uncomment if manually installing project
+#without specifying INSTALL_PREFIX elsewhere
+#set(CMAKE_INSTALL_PREFIX ${CMAKE_CURRENT_BINARY_DIR}/BufferTree/prefix)
+
+# for use when building as an external project
+install(TARGETS FastBufferTree
+  ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+  PUBLIC_HEADER DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
+)
