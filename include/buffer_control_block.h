@@ -65,21 +65,26 @@ public:
    * Lock the buffer for data transfer. Blocks the calling context if the
    * lock is unavailable.
    */
-  void lock();
+  inline void lock() {
+    mtx.lock();
+  }
 
   /**
    * Unlocks the buffer once data transfer is complete. Throws an error if
    * the buffer isn't locked.
    * @throw BufferNotLockedError if the buffer isn't locked.
    */
-  void unlock();
+  inline void unlock() {
+    mtx.unlock();
+  }
 
   /**
-   * Atomic method to check if the buffer is "busy", i.e. flushing or being
-   * flushed to.
-   * @return true if the buffer is busy.
+   * Acquire this buffer's lock and return true iff the buffer is not busy
+   * @return true if the caller now has the lock. False if the buffer was already locked.
    */
-  bool busy();
+  inline bool try_lock() {
+    return mtx.try_lock();
+  }
 
   /*
    * Write to the buffer managed by this metadata.
@@ -100,6 +105,8 @@ public:
   inline work_t work_info() {return work_t(min_key, id);}
   inline File_Pointer size() {return storage_ptr;}
   inline File_Pointer offset() {return file_offset;}
+  inline bool is_leaf() {return min_key == max_key;}
+
   inline void add_child(buffer_id_t child) {
     children_num++;
     first_child = (first_child == 0)? child : first_child;

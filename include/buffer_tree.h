@@ -14,6 +14,7 @@ typedef void insert_ret_t;
 typedef void flush_ret_t;
 typedef std::pair<Node, std::vector<std::pair<Node, bool>>> data_ret_t;
 
+class BufferFlusher;
 /*
  * Quick and dirty buffer tree skeleton.
  * Metadata about buffers (buffer control blocks) will be stored in memory.
@@ -48,21 +49,17 @@ private:
   // buffers which we will use when performing flushes
   char **flush_buffers;
 
-  // check root first then level 1 queue and finally a queue of anything else
-  std::queue<BufferControlBlock*> flush_queue1;     // level 1
-  std::queue<BufferControlBlock*> flush_queue_wild; // level > 1
+  // flusher threads
+  std::vector<BufferFlusher *> flushers;
 
   // utility to handle batching and writing to sketches
   // SketchWriteManager sketchWriteManager;
 
   /*
-   * root node and functions for handling it
+   * root node and meta-data
    */
   char *root_node;
-  flush_ret_t flush_root();
-  flush_ret_t flush_control_block(BufferControlBlock *bcb);
   uint root_position;
-  std::mutex root_lock;
 
   /*
    * function which actually carries out the flush. Designed to be
@@ -105,27 +102,11 @@ public:
    */
   flush_ret_t force_flush();
 
-  /*
-   * Flushes the buffer:
-   * 0. Checks if the root buffer is busy. If it is, wait until not busy.
-   *    Lock the root.
-   * 1. If the buffer is not stored in memory, read into memory.
-   * 2. If the root is a leaf buffer:
-   *      a. Collate and write_updates().
-   *      b. Unlock the root and RETURN.
-   * 2. Run heavy-hitters algorithm.
-   * 3. write_updates() to heavy hitters, leaving gaps in the buffer where
-   *    the elements were.
-   * 4. Find fixed pivots within buffer to split data on.
-   * 5. Locks children that need to be written to.
-   * 6. File-appends elements to children buffers. Updates storage pointers
-   *    of children. If any children have over M elements, add them to the
-   *    flush queue.
-   * 7. Resets storage pointer of root buffer to 0 and free the auxiliary
-   *    memory used to store the buffer.
-   * 8. Unlock children and root (in that order, please) and RETURN.
+  /* 
+   * Wrappers for flushing either root or non-root buffers
    */
-  flush_ret_t flush();
+  flush_ret_t flush_root();
+  flush_ret_t flush_control_block(BufferControlBlock *bcb);
 
   /*
    * Function to convert an update_t to a char array
@@ -166,6 +147,20 @@ public:
   data_ret_t get_data(work_t task);
 
   std::queue<work_t> work_queue;
+
+  // queues of buffers ready to be flushed
+  std::queue<BufferControlBlock*> flush_queue1;     // level 1
+  std::queue<BufferControlBlock*> flush_queue_wild; // level > 1
+
+  // lock around the flush_queue
+  std::mutex flush_lock;
+
+  // is the root node ready to be flushed
+  inline bool root_flushable() {
+    return root_position > M;
+  }
+  std::mutex root_lock;
+
   /*
    * Static variables which track universal information about the buffer tree which
    * we would like to be accesible to all the bufferControlBlocks

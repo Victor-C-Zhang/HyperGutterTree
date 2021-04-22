@@ -64,9 +64,9 @@ add_library(FastBufferTree
     include/buffer_tree.h
     src/buffer_control_block.cpp
     include/buffer_control_block.h
+    src/buffer_flusher.cpp
+    include/buffer_flusher.h
     include/update.h 
-    src/sketch_write_manager.cpp 
-    include/sketch_write_manager.h 
     include/sketch.h)
 target_link_libraries(FastBufferTree PRIVATE GTest::gtest)
 # optimize unless debug
