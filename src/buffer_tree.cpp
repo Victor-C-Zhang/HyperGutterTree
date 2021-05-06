@@ -157,20 +157,17 @@ void BufferTree::setup_tree() {
 
 // serialize an update to a data location (should only be used for root I think)
 inline void BufferTree::serialize_update(char *dst, update_t src) {
-	Node node1 = src.first.first;
-	Node node2 = src.first.second;
-	bool value = src.second;
+	Node node1 = src.first;
+	Node node2 = src.second;
 
 	memcpy(dst, &node1, sizeof(Node));
 	memcpy(dst + sizeof(Node), &node2, sizeof(Node));
-	memcpy(dst + sizeof(Node)*2, &value, sizeof(bool));
 }
 
 inline update_t BufferTree::deserialize_update(char *src) {
 	update_t dst;
-	memcpy(&dst.first.first, src, sizeof(Node));
-	memcpy(&dst.first.second, src + sizeof(Node), sizeof(Node));
-	memcpy(&dst.second, src + sizeof(Node)*2, sizeof(bool));
+	memcpy(&dst.first, src, sizeof(Node));
+	memcpy(&dst.second, src + sizeof(Node), sizeof(Node));
 
 	return dst;
 }
@@ -349,16 +346,16 @@ data_ret_t BufferTree::get_data(work_t task) {
 		return data;
 	}
 
-	while(off < len) {
+	while(off < (uint64_t)len) {
 		update_t upd = deserialize_update(serial_data + off);
 		// printf("got update: %u %u %i\n", upd.first.first, upd.first.second, upd.second);
-		if (upd.first.first == 0 && upd.first.second == 0) {
+		if (upd.first == 0 && upd.second == 0) {
 			break; // got a null entry so clear that out
 		}
 
-		if (upd.first.first == key) {
+		if (upd.first == key) {
 			// printf("query to node %d got edge to node %d\n", key, upd.first.second);
-			data.second.push_back(std::pair<Node, bool>(upd.first.second,upd.second));
+			data.second.push_back(upd.second);
 		}
 		off += serial_update_size;
 	}

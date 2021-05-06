@@ -12,7 +12,7 @@
 
 typedef void insert_ret_t;
 typedef void flush_ret_t;
-typedef std::pair<Node, std::vector<std::pair<Node, bool>>> data_ret_t;
+typedef std::pair<Node, std::vector<Node>> data_ret_t;
 
 /*
  * Quick and dirty buffer tree skeleton.
@@ -171,7 +171,7 @@ public:
    * we would like to be accesible to all the bufferControlBlocks
    */
   static uint page_size;
-  static const uint serial_update_size = sizeof(Node) + sizeof(Node) + sizeof(bool);
+  static const uint serial_update_size = sizeof(Node) + sizeof(Node);
   static uint8_t max_level;
   static uint32_t max_buffer_size;
   static uint32_t buffer_size;
