@@ -41,6 +41,8 @@ nodes, bool reset=false) : dir(dir), M(size), B(b), N(nodes) {
 	for (uint i = 0; i < B; i++) {
 		flush_buffers[i] = (char *) calloc(page_size, sizeof(char *));
 	}
+
+	std::atomic_init(&done_processing, false);
 	
 	// setup static variables
 	max_level       = 0;
@@ -303,7 +305,11 @@ flush_ret_t inline BufferTree::flush_root() {
 flush_ret_t inline BufferTree::flush_control_block(BufferControlBlock *bcb) {
 	if (bcb->min_key == bcb->max_key) {
 		// printf("adding key %i from buffer %i to work queue\n", bcb->min_key, bcb->get_id());
+		std::unique_lock<std::mutex> ul(worker_mutex);
 		work_queue.push(bcb->work_info());
+		ul.unlock();
+		worker_cv.notify_one();
+
 		return;
 	}
 
@@ -381,10 +387,14 @@ flush_ret_t BufferTree::force_flush() {
 		if (bcb != nullptr) {
 			if (bcb->min_key == bcb->max_key) {
 				// printf("Flushing key %i from buffer %i to work queue\n", bcb->min_key, bcb->get_id());
+				std::unique_lock<std::mutex> ul(worker_mutex);
 				work_queue.push(bcb->work_info());
+				ul.unlock();
+				worker_cv.notify_one();
 			} else {
 				flush_control_block(bcb);
 			}
 		}
 	}
+	std::atomic_store(&done_processing, true);
 }

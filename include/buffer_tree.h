@@ -1,6 +1,7 @@
 #ifndef FASTBUFFERTREE_BUFFER_TREE_H
 #define FASTBUFFERTREE_BUFFER_TREE_H
 
+#include <atomic>
 #include <cstdint>
 #include <string>
 #include <vector>
@@ -166,6 +167,14 @@ public:
   data_ret_t get_data(work_t task);
 
   std::queue<work_t> work_queue;
+
+  // whether the tree has been fully flushed down to the work queue.
+  // checked by a post-processing application 
+  std::atomic_bool done_processing;
+
+  // variables for worker producer/consumer architecture
+  std::mutex worker_mutex;
+  std::condition_variable worker_cv;
   /*
    * Static variables which track universal information about the buffer tree which
    * we would like to be accesible to all the bufferControlBlocks
