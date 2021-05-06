@@ -86,7 +86,8 @@ if (UNIX AND NOT APPLE)
   target_compile_options(FastBufferTree PRIVATE -DHAVE_FALLOCATE)
 endif ()
 set_target_properties(FastBufferTree PROPERTIES PUBLIC_HEADER include/buffer_tree.h)
-
+set_target_properties(FastBufferTree PROPERTIES PUBLIC_HEADER include/update.h)
+set_target_properties(FastBufferTree PROPERTIES PUBLIC_HEADER include/buffer_control_block.h)
 
 add_executable(buffertree_tests
   test/runner.cpp
