@@ -28,7 +28,7 @@ bool BufferControlBlock::busy() {
 }
 
 inline bool BufferControlBlock::needs_flush(uint32_t size_written) {
-	return storage_ptr > BufferTree::buffer_size && 
+	return storage_ptr >= BufferTree::buffer_size && 
 		storage_ptr - size_written < BufferTree::buffer_size;
 }
 
@@ -39,7 +39,7 @@ bool BufferControlBlock::write(char *data, uint32_t size) {
 		printf("buffer %i error\n", id);
 		throw BufferFullError(id);
 	}
-
+	uint32_t orig_size = size;
 
 	int len = pwrite(BufferTree::backing_store, data, size, file_offset + storage_ptr);
 	int w = 0;
@@ -53,8 +53,8 @@ bool BufferControlBlock::write(char *data, uint32_t size) {
 		len = pwrite(BufferTree::backing_store, data + w, size, file_offset + storage_ptr + w);
 	}
 
-	storage_ptr += size; // some null bytes at end
+	storage_ptr += size;
 
 	// return if this buffer should be added to the flush queue
-	return needs_flush(size);
+	return needs_flush(orig_size);
 }

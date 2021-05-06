@@ -99,6 +99,18 @@ public:
    */
   insert_ret_t insert(update_t upd);
 
+  /*
+   * Get data from the buffertree given a description of where the data is
+   * @param  task   Where the data we want to extract can be found and which key
+   * @retuns a vector of updates associated with the key
+   */
+  data_ret_t get_data(work_t task);
+
+  // queue of work which needs to be done and the locks which control access to it
+  std::queue<work_t> work_queue;
+  std::mutex queue_lock;
+  std::condition_variable queue_cond;
+
   /**
    * Flushes the entire tree down to the leaves.
    * @return nothing.
@@ -163,9 +175,6 @@ public:
    */
   void setup_tree();
 
-  data_ret_t get_data(work_t task);
-
-  std::queue<work_t> work_queue;
   /*
    * Static variables which track universal information about the buffer tree which
    * we would like to be accesible to all the bufferControlBlocks

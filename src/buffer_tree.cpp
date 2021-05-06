@@ -298,9 +298,12 @@ flush_ret_t inline BufferTree::flush_root() {
 }
 
 flush_ret_t inline BufferTree::flush_control_block(BufferControlBlock *bcb) {
-	if (bcb->min_key == bcb->max_key) {
+	if (bcb->min_key == bcb->max_key) { // this is a leaf node
 		// printf("adding key %i from buffer %i to work queue\n", bcb->min_key, bcb->get_id());
+		std::unique_lock<std::mutex> lk(queue_lock);
 		work_queue.push(bcb->work_info());
+		lk.unlock();
+		queue_cond.notify_one();
 		return;
 	}
 
@@ -378,7 +381,10 @@ flush_ret_t BufferTree::force_flush() {
 		if (bcb != nullptr) {
 			if (bcb->min_key == bcb->max_key) {
 				// printf("Flushing key %i from buffer %i to work queue\n", bcb->min_key, bcb->get_id());
+				std::unique_lock<std::mutex> lk(queue_lock);
 				work_queue.push(bcb->work_info());
+				lk.unlock();
+				queue_cond.notify_one();
 			} else {
 				flush_control_block(bcb);
 			}
