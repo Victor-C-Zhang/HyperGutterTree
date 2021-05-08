@@ -9,7 +9,7 @@
 #include <errno.h>
 #include <string.h>
 
-BufferControlBlock::BufferControlBlock(buffer_id_t id, uint32_t off, uint8_t level)
+BufferControlBlock::BufferControlBlock(buffer_id_t id, File_Pointer off, uint8_t level)
   : id(id), file_offset(off), level(level){
   storage_ptr = 0;
 }
@@ -41,7 +41,7 @@ bool BufferControlBlock::write(char *data, uint32_t size) {
 	}
 	uint32_t orig_size = size;
 
-	int len = pwrite(BufferTree::backing_store, data, size, file_offset + storage_ptr);
+	uint32_t len = pwrite(BufferTree::backing_store, data, size, file_offset + storage_ptr);
 	int w = 0;
 	while(len < size) {
 		if (len == -1) {

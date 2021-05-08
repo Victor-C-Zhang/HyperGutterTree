@@ -81,3 +81,11 @@ TEST(Experiment, LargeWide) {
   run_test(nodes, num_updates, buf, branch);
 }
 
+TEST(Experiment, ExtraLarge) {
+  const int nodes = 1024;
+  const int num_updates = MB << 8;
+  const int buf = MB << 1;
+  const int branch = 16;
+
+  run_test(nodes, num_updates, buf, branch);
+}

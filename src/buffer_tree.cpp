@@ -9,12 +9,12 @@
 /*
  * Static "global" BufferTree variables
  */
-uint BufferTree::page_size;
-uint8_t BufferTree::max_level;
+uint     BufferTree::page_size;
+uint8_t  BufferTree::max_level;
 uint32_t BufferTree::max_buffer_size;
 uint32_t BufferTree::buffer_size;
 uint64_t BufferTree::backing_EOF;
-int BufferTree::backing_store;
+int      BufferTree::backing_store;
 
 
 /*
@@ -102,7 +102,7 @@ void print_tree(std::vector<BufferControlBlock *>bcb_list) {
 void BufferTree::setup_tree() {
 	max_level = ceil(log(N) / log(B));
 	printf("Creating a tree of depth %i\n", max_level);
-	uint64_t size = 0;
+	File_Pointer size = 0;
 
 	// create the BufferControlBlocks
 	for (uint l = 1; l <= max_level; l++) {
@@ -115,7 +115,7 @@ void BufferTree::setup_tree() {
 		uint options = B;
 		bool skip = false;
 		uint prev = 0;
-		uint index = 0;
+		File_Pointer index = 0;
 		for (uint i = 0; i < level_size; i++) {
 			// get the parent of this node if not level 1 and if we have a new parent
 			if (l > 1 && (i-start) % B == 0) {
@@ -152,7 +152,7 @@ void BufferTree::setup_tree() {
     #endif
     
     backing_EOF = size;
-    //print_tree(buffers);
+    print_tree(buffers);
 }
 
 // serialize an update to a data location (should only be used for root I think)
@@ -244,12 +244,16 @@ flush_ret_t BufferTree::do_flush(char *data, uint32_t data_size, uint32_t begin,
 		Node key = load_key(data);
 		uint32_t child  = which_child(key, min_key, max_key, options);
 		if (child > B - 1) {
-			printf("ERROR: incorrect child %u abandoning insert key=%u min=%u max=%u\n", child, key, min_key, max_key);
+			printf("ERROR: incorrect child %u abandoning insert key=%lu min=%lu max=%lu\n", child, key, min_key, max_key);
+			printf("first child = %u\n", buffers[begin]->get_id());
+			printf("data pointer = %lu data_start=%lu data_size=%u\n", (uint64_t) data, (uint64_t) data_start, data_size);
 			data += serial_update_size;
+			exit(EXIT_SUCCESS);
 			continue;
 		}
 		if (buffers[child+begin]->min_key > key || buffers[child+begin]->max_key < key) {
-			printf("ERROR: bad key %u for child %u, child min = %u, max = %u abandoning insert\n", key, child, buffers[child+begin]->min_key, buffers[child+begin]->max_key);
+			printf("ERROR: bad key %lu for child %u, child min = %lu, max = %lu abandoning insert\n", 
+				key, child, buffers[child+begin]->min_key, buffers[child+begin]->max_key);
 			data += serial_update_size;
 			continue;
 		}
@@ -310,12 +314,17 @@ flush_ret_t inline BufferTree::flush_control_block(BufferControlBlock *bcb) {
 	//printf("flushing "); bcb->print();
 
 	char *data = (char *) malloc(max_buffer_size); // TODO malloc only once instead of per call
-	int len = pread(backing_store, data, max_buffer_size, bcb->offset());
-	if (len == -1) {
-		printf("ERROR flush failed to read from buffer %i, %s\n", bcb->get_id(), strerror(errno));
-		return;
+	uint32_t data_to_read = bcb->size();
+	uint32_t offset = 0;
+	while(data_to_read > 0) {
+		int len = pread(backing_store, data + offset, data_to_read, bcb->offset() + offset);
+		if (len == -1) {
+			printf("ERROR flush failed to read from buffer %i, %s\n", bcb->get_id(), strerror(errno));
+			return;
+		}
+		data_to_read -= len;
+		offset += len;
 	}
-
 	// printf("read %lu bytes\n", len);
 
 	do_flush(data, bcb->size(), bcb->first_child, bcb->min_key, bcb->max_key, bcb->children_num, flush_queue_wild);
