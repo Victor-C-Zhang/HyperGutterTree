@@ -12,7 +12,7 @@
 
 typedef void insert_ret_t;
 typedef void flush_ret_t;
-typedef std::pair<Node, std::vector<std::pair<Node, bool>>> data_ret_t;
+typedef std::pair<Node, std::vector<Node>> data_ret_t;
 
 /*
  * Quick and dirty buffer tree skeleton.
@@ -99,6 +99,18 @@ public:
    */
   insert_ret_t insert(update_t upd);
 
+  /*
+   * Get data from the buffertree given a description of where the data is
+   * @param  task   Where the data we want to extract can be found and which key
+   * @retuns a vector of updates associated with the key
+   */
+  data_ret_t get_data(work_t task);
+
+  // queue of work which needs to be done and the locks which control access to it
+  std::queue<work_t> work_queue;
+  std::mutex queue_lock;
+  std::condition_variable queue_cond;
+
   /**
    * Flushes the entire tree down to the leaves.
    * @return nothing.
@@ -163,15 +175,12 @@ public:
    */
   void setup_tree();
 
-  data_ret_t get_data(work_t task);
-
-  std::queue<work_t> work_queue;
   /*
    * Static variables which track universal information about the buffer tree which
    * we would like to be accesible to all the bufferControlBlocks
    */
   static uint page_size;
-  static const uint serial_update_size = sizeof(Node) + sizeof(Node) + sizeof(bool);
+  static const uint serial_update_size = sizeof(Node) + sizeof(Node);
   static uint8_t max_level;
   static uint32_t max_buffer_size;
   static uint32_t buffer_size;

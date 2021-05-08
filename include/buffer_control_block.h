@@ -13,7 +13,7 @@
 #include "update.h"
 
 typedef uint32_t buffer_id_t;
-typedef uint32_t File_Pointer;
+typedef uint64_t File_Pointer;
 typedef std::pair<Node, buffer_id_t> work_t;
 
 /**
@@ -59,7 +59,7 @@ public:
    * @param off the offset into the file at which this buffer's data begins
    * @param level the level in the tree this buffer resides at
    */
-  BufferControlBlock(buffer_id_t id, uint32_t off, uint8_t level);
+  BufferControlBlock(buffer_id_t id, File_Pointer off, uint8_t level);
 
   /**
    * Lock the buffer for data transfer. Blocks the calling context if the
@@ -106,7 +106,7 @@ public:
   }
 
   inline void print() {
-    printf("buffer %u: storage_ptr = %u, offset = %u, min_key=%u, max_key=%u, first_child=%u, #children=%u\n", 
+    printf("buffer %u: storage_ptr = %lu, offset = %lu, min_key=%lu, max_key=%lu, first_child=%u, #children=%u\n", 
       id, storage_ptr, file_offset, min_key, max_key, first_child, children_num);
   }
 };

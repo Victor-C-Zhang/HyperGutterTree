@@ -9,12 +9,12 @@
 /*
  * Static "global" BufferTree variables
  */
-uint BufferTree::page_size;
-uint8_t BufferTree::max_level;
+uint     BufferTree::page_size;
+uint8_t  BufferTree::max_level;
 uint32_t BufferTree::max_buffer_size;
 uint32_t BufferTree::buffer_size;
 uint64_t BufferTree::backing_EOF;
-int BufferTree::backing_store;
+int      BufferTree::backing_store;
 
 
 /*
@@ -102,7 +102,7 @@ void print_tree(std::vector<BufferControlBlock *>bcb_list) {
 void BufferTree::setup_tree() {
 	max_level = ceil(log(N) / log(B));
 	printf("Creating a tree of depth %i\n", max_level);
-	uint64_t size = 0;
+	File_Pointer size = 0;
 
 	// create the BufferControlBlocks
 	for (uint l = 1; l <= max_level; l++) {
@@ -115,7 +115,7 @@ void BufferTree::setup_tree() {
 		uint options = B;
 		bool skip = false;
 		uint prev = 0;
-		uint index = 0;
+		File_Pointer index = 0;
 		for (uint i = 0; i < level_size; i++) {
 			// get the parent of this node if not level 1 and if we have a new parent
 			if (l > 1 && (i-start) % B == 0) {
@@ -152,25 +152,22 @@ void BufferTree::setup_tree() {
     #endif
     
     backing_EOF = size;
-    //print_tree(buffers);
+    // print_tree(buffers);
 }
 
 // serialize an update to a data location (should only be used for root I think)
 inline void BufferTree::serialize_update(char *dst, update_t src) {
-	Node node1 = src.first.first;
-	Node node2 = src.first.second;
-	bool value = src.second;
+	Node node1 = src.first;
+	Node node2 = src.second;
 
 	memcpy(dst, &node1, sizeof(Node));
 	memcpy(dst + sizeof(Node), &node2, sizeof(Node));
-	memcpy(dst + sizeof(Node)*2, &value, sizeof(bool));
 }
 
 inline update_t BufferTree::deserialize_update(char *src) {
 	update_t dst;
-	memcpy(&dst.first.first, src, sizeof(Node));
-	memcpy(&dst.first.second, src + sizeof(Node), sizeof(Node));
-	memcpy(&dst.second, src + sizeof(Node)*2, sizeof(bool));
+	memcpy(&dst.first, src, sizeof(Node));
+	memcpy(&dst.second, src + sizeof(Node), sizeof(Node));
 
 	return dst;
 }
@@ -247,12 +244,16 @@ flush_ret_t BufferTree::do_flush(char *data, uint32_t data_size, uint32_t begin,
 		Node key = load_key(data);
 		uint32_t child  = which_child(key, min_key, max_key, options);
 		if (child > B - 1) {
-			printf("ERROR: incorrect child %u abandoning insert key=%u min=%u max=%u\n", child, key, min_key, max_key);
+			printf("ERROR: incorrect child %u abandoning insert key=%lu min=%lu max=%lu\n", child, key, min_key, max_key);
+			printf("first child = %u\n", buffers[begin]->get_id());
+			printf("data pointer = %lu data_start=%lu data_size=%u\n", (uint64_t) data, (uint64_t) data_start, data_size);
 			data += serial_update_size;
+			exit(EXIT_SUCCESS);
 			continue;
 		}
 		if (buffers[child+begin]->min_key > key || buffers[child+begin]->max_key < key) {
-			printf("ERROR: bad key %u for child %u, child min = %u, max = %u abandoning insert\n", key, child, buffers[child+begin]->min_key, buffers[child+begin]->max_key);
+			printf("ERROR: bad key %lu for child %u, child min = %lu, max = %lu abandoning insert\n", 
+				key, child, buffers[child+begin]->min_key, buffers[child+begin]->max_key);
 			data += serial_update_size;
 			continue;
 		}
@@ -301,21 +302,29 @@ flush_ret_t inline BufferTree::flush_root() {
 }
 
 flush_ret_t inline BufferTree::flush_control_block(BufferControlBlock *bcb) {
-	if (bcb->min_key == bcb->max_key) {
+	if (bcb->min_key == bcb->max_key) { // this is a leaf node
 		// printf("adding key %i from buffer %i to work queue\n", bcb->min_key, bcb->get_id());
+		std::unique_lock<std::mutex> lk(queue_lock);
 		work_queue.push(bcb->work_info());
+		lk.unlock();
+		queue_cond.notify_one();
 		return;
 	}
 
 	//printf("flushing "); bcb->print();
 
 	char *data = (char *) malloc(max_buffer_size); // TODO malloc only once instead of per call
-	int len = pread(backing_store, data, max_buffer_size, bcb->offset());
-	if (len == -1) {
-		printf("ERROR flush failed to read from buffer %i, %s\n", bcb->get_id(), strerror(errno));
-		return;
+	uint32_t data_to_read = bcb->size();
+	uint32_t offset = 0;
+	while(data_to_read > 0) {
+		int len = pread(backing_store, data + offset, data_to_read, bcb->offset() + offset);
+		if (len == -1) {
+			printf("ERROR flush failed to read from buffer %i, %s\n", bcb->get_id(), strerror(errno));
+			return;
+		}
+		data_to_read -= len;
+		offset += len;
 	}
-
 	// printf("read %lu bytes\n", len);
 
 	do_flush(data, bcb->size(), bcb->first_child, bcb->min_key, bcb->max_key, bcb->children_num, flush_queue_wild);
@@ -349,16 +358,16 @@ data_ret_t BufferTree::get_data(work_t task) {
 		return data;
 	}
 
-	while(off < len) {
+	while(off < (uint64_t)len) {
 		update_t upd = deserialize_update(serial_data + off);
 		// printf("got update: %u %u %i\n", upd.first.first, upd.first.second, upd.second);
-		if (upd.first.first == 0 && upd.first.second == 0) {
+		if (upd.first == 0 && upd.second == 0) {
 			break; // got a null entry so clear that out
 		}
 
-		if (upd.first.first == key) {
+		if (upd.first == key) {
 			// printf("query to node %d got edge to node %d\n", key, upd.first.second);
-			data.second.push_back(std::pair<Node, bool>(upd.first.second,upd.second));
+			data.second.push_back(upd.second);
 		}
 		off += serial_update_size;
 	}
@@ -381,7 +390,10 @@ flush_ret_t BufferTree::force_flush() {
 		if (bcb != nullptr) {
 			if (bcb->min_key == bcb->max_key) {
 				// printf("Flushing key %i from buffer %i to work queue\n", bcb->min_key, bcb->get_id());
+				std::unique_lock<std::mutex> lk(queue_lock);
 				work_queue.push(bcb->work_info());
+				lk.unlock();
+				queue_cond.notify_one();
 			} else {
 				flush_control_block(bcb);
 			}

@@ -22,9 +22,8 @@ void run_test(const int nodes, const int num_updates, const int buffer_size, con
   auto start = std::chrono::steady_clock::now();
   for (int i = 0; i < num_updates; i++) {
     update_t upd;
-    upd.first.first = i % nodes;
-    upd.first.second = (nodes - 1) - (i % nodes);
-    upd.second = true;
+    upd.first = i % nodes;
+    upd.second = (nodes - 1) - (i % nodes);
     buf_tree->insert(upd);
   }
   std::chrono::duration<double> delta = std::chrono::steady_clock::now() - start;
@@ -47,16 +46,15 @@ void run_test(const int nodes, const int num_updates, const int buffer_size, con
     // do the query
     data_ret_t ret = buf_tree->get_data(task);
     Node key = ret.first;
-    std::vector<std::pair<Node, bool>> updates = ret.second;
+    std::vector<Node> updates = ret.second;
     // how many updates to we expect to see to each node
     int per_node = num_updates / nodes;
 
     int count = 0;
 
-    for (std::pair<Node, bool> upd : updates) {
+    for (Node upd : updates) {
       // printf("edge to %d\n", upd.first);
-      ASSERT_EQ(nodes - (key + 1), upd.first) << "key " << key;
-      ASSERT_EQ(true, upd.second) << "key " << key;
+      ASSERT_EQ(nodes - (key + 1), upd) << "key " << key;
       count++;
     }
     ASSERT_EQ(per_node, count) << "key " << key;
@@ -83,3 +81,11 @@ TEST(Experiment, LargeWide) {
   run_test(nodes, num_updates, buf, branch);
 }
 
+TEST(Experiment, ExtraLarge) {
+  const int nodes = 1024;
+  const int num_updates = MB << 8;
+  const int buf = MB << 1;
+  const int branch = 16;
+
+  run_test(nodes, num_updates, buf, branch);
+}
