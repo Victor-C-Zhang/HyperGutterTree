@@ -152,7 +152,7 @@ void BufferTree::setup_tree() {
     #endif
     
     backing_EOF = size;
-    print_tree(buffers);
+    // print_tree(buffers);
 }
 
 // serialize an update to a data location (should only be used for root I think)
