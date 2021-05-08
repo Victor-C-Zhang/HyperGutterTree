@@ -9,11 +9,13 @@ This class specifies most of the meta-data and functions for handling a buffer t
 ### Tree Structure
 Tree includes parameters `M` the size of a buffer, `B` the branching factor, and finally `N` the number of graph node ids we expect to ingest.
 
-`                 root
-           /        |      \
-       node         node    node
-    /   |   \       /   \     |   \
-node  node  node  node node  node  node`
+```
+           ---root---
+         /      |     \
+     node       node    node
+   /  |  \       |  \     |  \
+node node node node node node node
+```
 
 Each of these nodes contains a buffer of size 2M and has B children. We construct the tree so that there is a unique node mapping to each of the `N` graph nodes. In the above example B is 3 and N is 7. The bottom level would be full if N equal to 3^2=9.
 
@@ -26,18 +28,22 @@ A flush of a leaf node is simply accomplished by adding a 'tag' to the data in q
 
 
 ## BufferControlBlock
-Encodes the meta-data associated with a block including its `file_offset` and `storage_ptr`. These two attributes represent the location of a node within the large and physically contiguous `backing_store` file. The levels of the tree are stored in the file following a breadth first search. Therefore each level is contiguous.
+Encodes the meta-data associated with a block including its `file_offset` and `storage_ptr`. These two attributes represent the location of a node within the large and physically contiguous `backing_store` file. The nodes of the tree are stored in the file following a breadth first search. Specifically, the data stored within the buffer at each node is what is held within the file. Therefore the data in each level is contiguous on disk.
 
 Example:  
-`-----------------------------------------------
-Node 1| Node 2| Node 3| Node 4| Node 5| Node 6|
------------------------------------------------`
+```
+------------------------------------------------
+|Node 1| Node 2| Node 3| Node 4| Node 5| Node 6|
+------------------------------------------------
+```
 
 This buffer encodes the following tree with `B=2` and `N=4`
-`        root
+```
+      ---root---
        /      \      
    node1      node2    
     /  \       /  \  
-node3 node4 node5 node6`
+node3 node4 node5 node6
+```
 
 Note that the root does not appear in the backing store. This is because it is stored entirely in RAM. There is also no BufferControlBlock for the root node for the same reason.
