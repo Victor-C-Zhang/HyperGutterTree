@@ -64,7 +64,9 @@ add_library(FastBufferTree
     include/buffer_tree.h
     src/buffer_control_block.cpp
     include/buffer_control_block.h
-    include/update.h)
+    include/update.h
+    src/flush_worker.cpp
+    include/flush_worker.h)
 target_link_libraries(FastBufferTree PRIVATE GTest::gtest)
 # optimize unless debug
 if (DEFINED ENV{DEBUG})

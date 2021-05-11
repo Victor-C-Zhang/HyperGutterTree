@@ -53,6 +53,10 @@ public:
   Node min_key;
   Node max_key;
 
+  // values used to optimize flush requests
+  double timestamp; // time of last request to this buffer
+  int priority; // similar to scheduling priority, 0 is highest priority
+
   /**
    * Generates metadata and file handle for a new buffer.
    * @param id an integer identifier for the buffer.
