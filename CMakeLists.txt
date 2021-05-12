@@ -59,6 +59,10 @@ if(NOT GTest_FOUND)
   endif()
 endif()
 
+# OpenMP required
+add_compile_options(-fopenmp)
+add_link_options(-fopenmp)
+
 add_library(FastBufferTree
     src/buffer_tree.cpp
     include/buffer_tree.h
@@ -67,7 +71,7 @@ add_library(FastBufferTree
     include/update.h
     src/flush_worker.cpp
     include/flush_worker.h)
-target_link_libraries(FastBufferTree PRIVATE GTest::gtest)
+#target_link_libraries(FastBufferTree PRIVATE GTest::gtest)
 # optimize unless debug
 if (DEFINED ENV{DEBUG})
   message("Disabling optimizations and enabling debug symbols")
@@ -85,13 +89,15 @@ if (UNIX AND NOT APPLE)
   target_compile_options(FastBufferTree PRIVATE -DHAVE_FALLOCATE)
 endif ()
 set_target_properties(FastBufferTree PROPERTIES PUBLIC_HEADER 
-  "include/buffer_tree.h;include/buffer_control_block.h;include/update.h"
+  "include/buffer_tree.h;include/buffer_control_block.h;include/flush_worker.h;include/update.h"
 )
 
 add_executable(buffertree_tests
   test/runner.cpp
-  test/basic_test.cpp)
-target_link_libraries(buffertree_tests PRIVATE GTest::gtest FastBufferTree)
+  test/basic_test.cpp
+  test/flush_worker_test.cpp)
+target_link_libraries(buffertree_tests PRIVATE GTest::gtest
+    FastBufferTree)
 # optimize unless debug
 if (DEFINED ENV{DEBUG})
   message("Disabling optimizations and enabling debug symbols")

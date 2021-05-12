@@ -10,6 +10,9 @@
 #include "update.h"
 #include "buffer_control_block.h"
 
+// forward declaration
+class FlushWorker;
+
 typedef void insert_ret_t;
 typedef void flush_ret_t;
 typedef std::pair<Node, std::vector<Node>> data_ret_t;
@@ -28,6 +31,8 @@ typedef std::pair<Node, std::vector<Node>> data_ret_t;
  */
 class BufferTree {
 private:
+  friend class FlushWorker;
+
   // root directory of tree
   std::string dir;
 

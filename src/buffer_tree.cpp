@@ -332,11 +332,11 @@ flush_ret_t inline BufferTree::flush_control_block(BufferControlBlock *bcb) {
 
 	free(data);
 
-	while (!flush_queue_wild.empty()) { // REMOVE later ... synchronous approach
-		BufferControlBlock *to_flush = flush_queue_wild.front();
-		flush_queue_wild.pop();
-		flush_control_block(to_flush);
-	}
+//	while (!flush_queue_wild.empty()) { // REMOVE later ... synchronous approach
+//		BufferControlBlock *to_flush = flush_queue_wild.front();
+//		flush_queue_wild.pop();
+//		flush_control_block(to_flush);
+//	}
 }
 
 // load data from buffer memory location so long as the key matches
