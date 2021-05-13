@@ -23,8 +23,6 @@ typedef std::pair<Node, buffer_id_t> work_t;
 class BufferControlBlock {
 private:
   buffer_id_t id;
-  // busy lock
-  std::mutex mtx;
 
   // condition variable to determine if the buffer needs to be flushed
   // std::condition_variable needs_flushing;
@@ -53,9 +51,13 @@ public:
   Node min_key;
   Node max_key;
 
-  // values used to optimize flush requests
+  // values used to operate flushes and flush requests
+  std::mutex mtx;
+  std::condition_variable cv;
   double timestamp; // time of last request to this buffer
   int priority; // similar to scheduling priority, 0 is highest priority
+  bool should_flush = false; // flag to tide over trampolining between
+  // flush_control_block and the FlushWorker taking up the job
 
   /**
    * Generates metadata and file handle for a new buffer.
@@ -99,7 +101,7 @@ public:
    */
   void flush();
 
-  inline void reset() {storage_ptr = 0;}
+  inline void reset() {storage_ptr = 0; should_flush = false; cv.notify_all();}
   inline buffer_id_t get_id() {return id;}
   inline work_t work_info() {return work_t(min_key, id);}
   inline File_Pointer size() {return storage_ptr;}
@@ -113,6 +115,7 @@ public:
     printf("buffer %u: storage_ptr = %lu, offset = %lu, min_key=%lu, max_key=%lu, first_child=%u, #children=%u\n", 
       id, storage_ptr, file_offset, min_key, max_key, first_child, children_num);
   }
+
 };
 
 class BufferNotLockedError : public std::exception {

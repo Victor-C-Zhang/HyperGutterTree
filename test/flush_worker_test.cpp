@@ -30,7 +30,7 @@ TEST(FlushWorkerTestSuite, PriorityQueueOrderingTest) {
   fw.request_flush(bcb[4], 1);
   fw.request_flush(bcb[2], 1);
 
-  int expected_2[] = {0, 2, 1, 4, 3};
+  int expected_2[] = {4, 0, 2, 1, 3};
   iter = 0;
   for (auto v : fw.flush_queue) {
     ASSERT_EQ(v, bcb[expected_2[iter]]);

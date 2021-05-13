@@ -5,6 +5,7 @@
 #include <string.h> //memcpy
 #include <fcntl.h>  //posix_fallocate
 #include <errno.h>
+#include <omp.h>    // pragma omp task
 
 /*
  * Static "global" BufferTree variables
@@ -24,7 +25,7 @@ int      BufferTree::backing_store;
  * We assume that node indices begin at 0 and increase to N-1
  */
 BufferTree::BufferTree(std::string dir, uint32_t size, uint32_t b, Node
-nodes, bool reset=false) : dir(dir), M(size), B(b), N(nodes) {
+nodes, bool reset=false) : dir(dir), M(size), B(b), N(nodes), flusher(this) {
 	page_size = sysconf(_SC_PAGE_SIZE); // works on POSIX systems (alternative is boost)
 	int file_flags = O_RDWR | O_CREAT; // direct memory O_DIRECT may or may not be good
 	if (reset) {
@@ -69,7 +70,10 @@ nodes, bool reset=false) : dir(dir), M(size), B(b), N(nodes) {
 	// will want to use pwrite/read so that the IOs are thread safe and all threads can share a single file descriptor
 	// if we don't use mmap that is
 
-	// printf("Successfully created buffer tree\n");
+#pragma omp task
+	flusher.listen();
+
+	printf("Successfully created buffer tree\n");
 }
 
 BufferTree::~BufferTree() {
@@ -230,7 +234,7 @@ inline uint32_t which_child(Node key, Node min_key, Node max_key, uint8_t option
  * IMPORTANT: Unless we add more flush_buffers only a single flush may occur at once
  * otherwise the data will clash
  */
-flush_ret_t BufferTree::do_flush(char *data, uint32_t data_size, uint32_t begin, Node min_key, Node max_key, uint8_t options, std::queue<BufferControlBlock *> &fq) {
+flush_ret_t BufferTree::do_flush(char *data, uint32_t data_size, uint32_t begin, Node min_key, Node max_key, uint8_t options) {
 	// setup
 	uint32_t full_flush = page_size - (page_size % serial_update_size);
 
@@ -265,7 +269,9 @@ flush_ret_t BufferTree::do_flush(char *data, uint32_t data_size, uint32_t begin,
 			// write to our child, return value indicates if it needs to be flushed
 			uint size = flush_positions[child] - flush_buffers[child];
 			if(buffers[begin+child]->write(flush_buffers[child], size)) {
-				fq.push(buffers[begin+child]);
+        buffers[begin+child]->should_flush = true;
+        flusher.request_flush(buffers[begin+child],
+                              buffers[begin+child]->level);
 			}
 
 			flush_positions[child] = flush_buffers[child]; // reset the flush_position
@@ -279,7 +285,8 @@ flush_ret_t BufferTree::do_flush(char *data, uint32_t data_size, uint32_t begin,
 			// write to child i, return value indicates if it needs to be flushed
 			uint size = flush_positions[i] - flush_buffers[i];
 			if(buffers[begin+i]->write(flush_buffers[i], size)) {
-				fq.push(buffers[begin+i]);
+        buffers[begin+i]->should_flush = true;
+        flusher.request_flush(buffers[begin+i], buffers[begin+i]->level);
 			}
 		}
 	}
@@ -287,17 +294,30 @@ flush_ret_t BufferTree::do_flush(char *data, uint32_t data_size, uint32_t begin,
 }
 
 flush_ret_t inline BufferTree::flush_root() {
+  for (int i = 0; i < B; ++i) {
+    BufferControlBlock* child = buffers[i];
+    std::unique_lock<std::mutex> child_mtx(child->mtx);
+    if (child->should_flush) {
+      child_mtx.unlock();
+      if (child->min_key != child->max_key) { // hoist priority if required
+        flusher.replace_if_exists(child, 0);
+      }
+      child_mtx.lock();
+      child->cv.wait(child_mtx, [child]{return !child->should_flush;});
+    }
+    child_mtx.unlock();
+  }
 	//printf("Flushing root\n");
 	// root_lock.lock(); // TODO - we can probably reduce this locking to only the last page
-	do_flush(root_node, root_position, 0, 0, N-1, B, flush_queue1);
+	do_flush(root_node, root_position, 0, 0, N-1, B);
 	root_position = 0;
 	// root_lock.unlock();
 
-	while (!flush_queue1.empty()) { // REMOVE later ... synchronous approach
-		BufferControlBlock *to_flush = flush_queue1.front();
-		flush_queue1.pop();
-		flush_control_block(to_flush);
-	}
+//	while (!flush_queue1.empty()) { // REMOVE later ... synchronous approach
+//		BufferControlBlock *to_flush = flush_queue1.front();
+//		flush_queue1.pop();
+//		flush_control_block(to_flush);
+//	}
 
 }
 
@@ -306,9 +326,30 @@ flush_ret_t inline BufferTree::flush_control_block(BufferControlBlock *bcb) {
 		// printf("adding key %i from buffer %i to work queue\n", bcb->min_key, bcb->get_id());
 		std::unique_lock<std::mutex> lk(queue_lock);
 		work_queue.push(bcb->work_info());
+		std::unique_lock<std::mutex> bcb_lock(bcb->mtx);
+		bcb->should_flush = true;
+		bcb_lock.unlock();
 		lk.unlock();
 		queue_cond.notify_one();
 		return;
+	}
+
+	// TODO: replicate this in flush_root or compartmentalize into own function
+	std::unique_lock<std::mutex> bcb_lock(bcb->mtx);
+	// check that the children are free. if they are, we're guaranteed that no
+	// thread will get access to the child while the parent is locked
+	for (int i = 0; i < bcb->children_num; ++i) {
+	  BufferControlBlock* child = buffers[bcb->first_child + i];
+    std::unique_lock<std::mutex> child_mtx(child->mtx);
+    if (child->should_flush) {
+      child_mtx.unlock();
+      if (child->min_key != child->max_key) { // hoist priority if required
+        flusher.replace_if_exists(child, bcb->level);
+      }
+      child_mtx.lock();
+      child->cv.wait(child_mtx, [child]{return !child->should_flush;});
+    }
+    child_mtx.unlock();
 	}
 
 	//printf("flushing "); bcb->print();
@@ -327,7 +368,7 @@ flush_ret_t inline BufferTree::flush_control_block(BufferControlBlock *bcb) {
 	}
 	// printf("read %lu bytes\n", len);
 
-	do_flush(data, bcb->size(), bcb->first_child, bcb->min_key, bcb->max_key, bcb->children_num, flush_queue_wild);
+	do_flush(data, bcb->size(), bcb->first_child, bcb->min_key, bcb->max_key, bcb->children_num);
 	bcb->reset();
 
 	free(data);
@@ -349,12 +390,14 @@ data_ret_t BufferTree::get_data(work_t task) {
 	BufferControlBlock *bcb = buffers[task.second];
 
 	// printf("getting data from positon %u and for key %u\n", task.second, key);
+  std::unique_lock<std::mutex> bcb_lock(bcb->mtx);
 
 	char *serial_data = (char *) malloc(bcb->size());
 	int len = pread(backing_store, serial_data, bcb->size(), bcb->offset());
 	// printf("read %lu bytes\n", len);
 	if (len == -1) {
 		printf("ERROR get_data failed to read from buffer %i, %s\n", bcb->get_id(), strerror(errno));
+		bcb_lock.unlock();
 		return data;
 	}
 
@@ -372,10 +415,11 @@ data_ret_t BufferTree::get_data(work_t task) {
 		off += serial_update_size;
 	}
 
-	free(serial_data);
-
 	// reset the BufferControlBlock (we have emptied it of data)
 	bcb->reset();
+	bcb_lock.unlock();
+
+  free(serial_data);
 
 	return data;
 }

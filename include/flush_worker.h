@@ -60,6 +60,14 @@ public:
    * @param priority    the priority of the job.
    */
   void request_flush(BufferControlBlock* bcb, int priority);
+
+  /**
+   * Utility to replace an already-existing entry.
+   * @param bcb
+   * @param priority
+   * @return true if replacement was successful, false if an entry was not found.
+   */
+  bool replace_if_exists(BufferControlBlock *bcb, int priority);
 };
 
 

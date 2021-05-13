@@ -9,6 +9,7 @@
 #include <math.h>
 #include "update.h"
 #include "buffer_control_block.h"
+#include "flush_worker.h"
 
 // forward declaration
 class FlushWorker;
@@ -54,8 +55,8 @@ private:
   char **flush_buffers;
 
   // check root first then level 1 queue and finally a queue of anything else
-  std::queue<BufferControlBlock*> flush_queue1;     // level 1
-  std::queue<BufferControlBlock*> flush_queue_wild; // level > 1
+//  std::queue<BufferControlBlock*> flush_queue1;     // level 1
+//  std::queue<BufferControlBlock*> flush_queue_wild; // level > 1
 
   // utility to handle batching and writing to sketches
   // SketchWriteManager sketchWriteManager;
@@ -69,6 +70,8 @@ private:
   uint root_position;
   std::mutex root_lock;
 
+  // tool to async flush
+  FlushWorker flusher;
   /*
    * function which actually carries out the flush. Designed to be
    * called either upon the root or upon a buffer at any level of the tree
@@ -78,10 +81,9 @@ private:
    * @param min_key     the smalleset key this node is responsible for
    * @param max_key     the largest key this node is responsible for
    * @param options     the number of children this node has
-   * @param fq          the flush queue to place this node's children in if they need to be flushed
    * @returns nothing
    */
-  flush_ret_t do_flush(char *data, uint32_t size, uint32_t begin, Node min_key, Node max_key, uint8_t options, std::queue<BufferControlBlock *> &fq);
+  flush_ret_t do_flush(char *data, uint32_t size, uint32_t begin, Node min_key, Node max_key, uint8_t options);
 
 public:
   /**

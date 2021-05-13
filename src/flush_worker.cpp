@@ -33,7 +33,7 @@ void FlushWorker::request_flush(BufferControlBlock *bcb, int priority) {
   std::unique_lock<std::mutex> pq_lock(pq_mutex);
   auto buf_ptr = flush_queue.find(bcb);
   bool should_notify = true;
-  if (buf_ptr != flush_queue.end() && (*buf_ptr)->priority == priority) {
+  if (buf_ptr != flush_queue.end() && (*buf_ptr)->priority <= priority) {
     pq_lock.unlock();
     return;
   }
@@ -46,4 +46,24 @@ void FlushWorker::request_flush(BufferControlBlock *bcb, int priority) {
   flush_queue.insert(bcb);
   if (should_notify) pq_cv.notify_one();
   pq_lock.unlock();
+}
+
+
+bool FlushWorker::replace_if_exists(BufferControlBlock *bcb, int priority) {
+  std::unique_lock<std::mutex> pq_lock(pq_mutex);
+  auto buf_ptr = flush_queue.find(bcb);
+  if (buf_ptr == flush_queue.end()) {
+    pq_lock.unlock();
+    return false;
+  }
+  if ((*buf_ptr)->priority <= priority) {
+    pq_lock.unlock();
+    return true;
+  }
+  flush_queue.erase(buf_ptr);
+  bcb->priority = priority;
+  bcb->timestamp = omp_get_wtime();
+  flush_queue.insert(bcb);
+  pq_lock.unlock();
+  return true;
 }
