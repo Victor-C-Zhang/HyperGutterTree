@@ -5,7 +5,7 @@
 #include <omp.h>
 #include "../include/flush_worker.h"
 
-FlushWorker::FlushWorker(BufferTree* bufferTree) {
+FlushWorker::FlushWorker(StreamIngestor* bufferTree) {
   bt = bufferTree;
   std::atomic_init(&can_exit, false);
 }

@@ -70,7 +70,7 @@ add_library(FastBufferTree
     include/buffer_control_block.h
     include/update.h
     src/flush_worker.cpp
-    include/flush_worker.h)
+    include/flush_worker.h include/stream_ingestor.h)
 #target_link_libraries(FastBufferTree PRIVATE GTest::gtest)
 # optimize unless debug
 if (DEFINED ENV{DEBUG})
@@ -89,7 +89,7 @@ if (UNIX AND NOT APPLE)
   target_compile_options(FastBufferTree PRIVATE -DHAVE_FALLOCATE)
 endif ()
 set_target_properties(FastBufferTree PROPERTIES PUBLIC_HEADER 
-  "include/buffer_tree.h;include/buffer_control_block.h;include/flush_worker.h;include/update.h"
+  "include/buffer_tree.h;include/stream_ingestor.h;include/buffer_control_block.h;include/flush_worker.h;include/update.h"
 )
 
 add_executable(buffertree_tests

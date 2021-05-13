@@ -9,10 +9,7 @@
 #include <atomic>
 #include <gtest/gtest_prod.h>
 #include "buffer_control_block.h"
-#include "buffer_tree.h"
-
-// forward declaration
-class BufferTree;
+#include "stream_ingestor.h"
 
 struct FlushQueueEntryCompare {
   bool operator()(BufferControlBlock const *e1, BufferControlBlock const *e2) {
@@ -34,7 +31,7 @@ class FlushWorker {
   // to alert the manager thread when there are things to be flushed
   std::condition_variable pq_cv;
 
-  BufferTree* bt;
+  StreamIngestor* bt;
 
   /**
    * Utility to flush the first BCB in the pqueue.
@@ -46,7 +43,7 @@ public:
   // whether we can quit processing flushes
   std::atomic_bool can_exit;
 
-  FlushWorker(BufferTree* bufferTree);
+  FlushWorker(StreamIngestor* bufferTree);
 
   /**
    * Function to listen for and assign flush requests.

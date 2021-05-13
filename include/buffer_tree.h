@@ -10,12 +10,9 @@
 #include "update.h"
 #include "buffer_control_block.h"
 #include "flush_worker.h"
-
-// forward declaration
-class FlushWorker;
+#include "stream_ingestor.h"
 
 typedef void insert_ret_t;
-typedef void flush_ret_t;
 typedef std::pair<Node, std::vector<Node>> data_ret_t;
 
 /*
@@ -30,7 +27,7 @@ typedef std::pair<Node, std::vector<Node>> data_ret_t;
  * DESIGN NOTE: Currently, a buffer cannot flush to another buffer that needs to
  * be flushed. This is to prevent starvation.
  */
-class BufferTree {
+class BufferTree : public StreamIngestor {
 private:
   friend class FlushWorker;
 
