@@ -8,10 +8,16 @@ set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${PROJECT_BINARY_DIR}/lib)
 
 #Uncomment to enable debug
 #set(ENV{DEBUG} ON)
+find_package(OpenMP)
+if(OPENMP_FOUND)
+  message("Found OpenMP!")
+else()
+    message(FATAL_ERROR "Missed OpenMP!")
+endif()
 
 if("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU")
   message("Adding GNU compiler flags")
-  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -W -Wall")
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -W -Wall -fopenmp")
 elseif("${CMAKE_CXX_COMPILER_ID}" STREQUAL "MSVC")
   message("Adding MSVC compiler flags")
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /Wall")
@@ -60,8 +66,13 @@ if(NOT GTest_FOUND)
 endif()
 
 # OpenMP required
-add_compile_options(-fopenmp)
-add_link_options(-fopenmp)
+find_package(OpenMP REQUIRED)
+
+if(OPENMP_FOUND)
+  set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${OpenMP_C_FLAGS}")
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${OpenMP_CXX_FLAGS}")
+  set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} ${OpenMP_EXE_LINKER_FLAGS}")
+endif()
 
 add_library(FastBufferTree
     src/buffer_tree.cpp
@@ -95,7 +106,7 @@ set_target_properties(FastBufferTree PROPERTIES PUBLIC_HEADER
 add_executable(buffertree_tests
   test/runner.cpp
   test/basic_test.cpp
-  test/flush_worker_test.cpp)
+  test/flush_worker_test.cpp test/mocks/GraphWorkerMock.cpp test/mocks/GraphWorkerMock.h)
 target_link_libraries(buffertree_tests PRIVATE GTest::gtest
     FastBufferTree)
 # optimize unless debug
@@ -104,7 +115,8 @@ if (DEFINED ENV{DEBUG})
   target_compile_options(buffertree_tests PRIVATE -g)
 else ()
   if("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU")
-    target_compile_options(buffertree_tests PRIVATE -O3)
+    target_compile_options(buffertree_tests PRIVATE -O3 -fopenmp)
+    target_link_options(buffertree_tests PRIVATE -fopenmp)
   elseif("${CMAKE_CXX_COMPILER_ID}" STREQUAL "MSVC")
     target_compile_options(buffertree_tests PRIVATE /O2)
   endif()

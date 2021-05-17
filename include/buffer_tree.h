@@ -103,8 +103,9 @@ public:
    */
   insert_ret_t insert(update_t upd);
 
-  /*
-   * Get data from the buffertree given a description of where the data is
+  /**
+   * Extracts data from the buffertree given a description of where the data
+   * is. Guaranteed to clear the buffer from which we extract.
    * @param  task   Where the data we want to extract can be found and which key
    * @retuns a vector of updates associated with the key
    */

@@ -70,7 +70,7 @@ nodes, bool reset=false) : dir(dir), M(size), B(b), N(nodes), flusher(this) {
 	// will want to use pwrite/read so that the IOs are thread safe and all threads can share a single file descriptor
 	// if we don't use mmap that is
 
-#pragma omp task
+#pragma omp task default(none)
 	flusher.listen();
 
 	printf("Successfully created buffer tree\n");
@@ -334,7 +334,6 @@ flush_ret_t inline BufferTree::flush_control_block(BufferControlBlock *bcb) {
 		return;
 	}
 
-	// TODO: replicate this in flush_root or compartmentalize into own function
 	std::unique_lock<std::mutex> bcb_lock(bcb->mtx);
 	// check that the children are free. if they are, we're guaranteed that no
 	// thread will get access to the child while the parent is locked
