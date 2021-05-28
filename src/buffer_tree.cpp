@@ -100,41 +100,53 @@ void print_tree(std::vector<BufferControlBlock *>bcb_list) {
 
 // TODO: clean up this function
 void BufferTree::setup_tree() {
-	max_level = ceil(log(N) / log(B));
+	double sketch_size = 24 * pow(log(N) / log(2), 3);
+	uint32_t basement_size = ceil((double) M / sketch_size); // maximum number of graph nodes in a basement node
+	uint32_t node_num = ceil((double)N / ((double) M / sketch_size)); // number of basement nodes
+	// basement nodes contain the updates for multiple graph nodes within them.
+	// technically they will be converted to multiple bufferControlBlocks of reduced size
+
+	max_level = ceil(log(node_num) / log(B));
 	printf("Creating a tree of depth %i\n", max_level);
 	File_Pointer size = 0;
 
 	// create the BufferControlBlocks
-	for (uint l = 1; l <= max_level; l++) {
-		uint level_size  = pow(B, l); // number of blocks in this level
-		uint plevel_size = pow(B, l-1);
-		uint start = buffers.size();
-		buffers.reserve(start + level_size);
-		Node key = 0;
+	for (uint l = 1; l <= max_level; l++) { // loop through all levels
+		uint level_size    = pow(B, l); // number of blocks in this level
+		uint plevel_size   = pow(B, l-1);
+		uint start         = buffers.size();
+		Node key           = 0;
 		double parent_keys = N;
-		uint options = B;
-		bool skip = false;
-		uint prev = 0;
+		uint options       = B;
+		bool skip          = false;
+		uint parent        = 0;
 		File_Pointer index = 0;
-		for (uint i = 0; i < level_size; i++) {
+
+		buffers.reserve(start + level_size);
+		for (uint i = 0; i < level_size; i++) { // loop through all blocks in the level
 			// get the parent of this node if not level 1 and if we have a new parent
 			if (l > 1 && (i-start) % B == 0) {
-				prev = start + i/B - plevel_size; // this logic should check out because only the last level is ever not full
-				parent_keys = buffers[prev]->max_key - buffers[prev]->min_key + 1;
-				key = buffers[prev]->min_key;
-				options = B;
-				skip = (parent_keys == 1)? true : false;
+				parent      = start + i/B - plevel_size; // this logic should check out because only the last level is ever not full
+				parent_keys = buffers[parent]->max_key - buffers[parent]->min_key + 1;
+				key         = buffers[parent]->min_key;
+				options     = B;
+				skip        = (parent_keys == 1)? true : false; // if parent leaf then skip
 			}
 			if (skip || parent_keys == 0) {
 				continue;
 			}
 
+			// if basement then create enough nodes to cover the number of children needed
+			// then add_child for all these nodes.
+
+
+			// if not a basement node. Then do normal stuff.
 			BufferControlBlock *bcb = new BufferControlBlock(start + index, size + max_buffer_size*index, l);
 	 		bcb->min_key     = key;
-	 		key              += ceil(parent_keys/options);
+	 		key              += ceil(parent_keys/options); // TODO: need to modify this to consider basement node granularity
 			bcb->max_key     = key - 1;
 			if (l != 1)
-				buffers[prev]->add_child(start + index);
+				buffers[parent]->add_child(start + index);
 			
 			parent_keys -= ceil(parent_keys/options);
 			options--;
@@ -230,14 +242,15 @@ inline uint32_t which_child(Node key, Node min_key, Node max_key, uint8_t option
  * IMPORTANT: Unless we add more flush_buffers only a single flush may occur at once
  * otherwise the data will clash
  */
-flush_ret_t BufferTree::do_flush(char *data, uint32_t data_size, uint32_t begin, Node min_key, Node max_key, uint8_t options, std::queue<BufferControlBlock *> &fq) {
+flush_ret_t BufferTree::do_flush(char *data, uint32_t data_size, uint32_t begin, 
+	Node min_key, Node max_key, uint8_t options, std::queue<BufferControlBlock *> &fq) {
 	// setup
 	uint32_t full_flush = page_size - (page_size % serial_update_size);
 
 	char *data_start = data;
 	char **flush_positions = (char **) malloc(sizeof(char *) * B); // TODO move malloc out of this function
 	for (uint i = 0; i < B; i++) {
-		flush_positions[i] = flush_buffers[i]; // TODO this casting is annoying (just convert everything to update_t type?)
+		flush_positions[i] = flush_buffers[i];
 	}
 
 	while (data - data_start < data_size) {
@@ -382,7 +395,7 @@ data_ret_t BufferTree::get_data(work_t task) {
 
 flush_ret_t BufferTree::force_flush() {
 	// printf("Force flush\n");
-	flush_root();
+	flush_root();       
 	// loop through each of the bufferControlBlocks and flush it
 	// looping from 0 on should force a top to bottom flush (if we do this right)
 	
