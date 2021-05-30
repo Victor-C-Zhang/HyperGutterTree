@@ -9,6 +9,7 @@
 #include <math.h>
 #include "update.h"
 #include "buffer_control_block.h"
+#include "circular_queue.h"
 
 typedef void insert_ret_t;
 typedef void flush_ret_t;
@@ -78,6 +79,9 @@ private:
    */
   flush_ret_t do_flush(char *data, uint32_t size, uint32_t begin, Node min_key, Node max_key, uint8_t options, std::queue<BufferControlBlock *> &fq);
 
+  // Circular queue in which we place leaves that fill up
+  CircularQueue *cq;
+
 public:
   /**
    * Generates a new homebrew buffer tree.
@@ -88,9 +92,10 @@ public:
    *                the true buffer size, which can be between size and 2*size.
    * @param b       branching factor.
    * @param nodes   number of nodes in the graph
+   * @param workers the number of workers which will be using this buffer tree (defaults to 1)
    * @param reset   should truncate the file storage upon opening
    */
-  BufferTree(std::string dir, uint32_t size, uint32_t b, Node nodes, bool reset);
+  BufferTree(std::string dir, uint32_t size, uint32_t b, Node nodes, int workers, bool reset);
   ~BufferTree();
   /**
    * Puts an update into the data structure.
@@ -100,11 +105,12 @@ public:
   insert_ret_t insert(update_t upd);
 
   /*
-   * Get data from the buffertree given a description of where the data is
-   * @param  task   Where the data we want to extract can be found and which key
-   * @retuns a vector of updates associated with the key
+   * Ask the buffer tree for data and sleep if necessary until it is available.
+   * @param noBlock if false then block the current thread until data is available.
+   * @param data    this is where to the key and vector of updates associated with it
+   * @return        true true if got valid data, false if unable to get data.
    */
-  data_ret_t get_data(work_t task);
+  bool get_data(bool noBlock, data_ret_t &data);
 
   // queue of work which needs to be done and the locks which control access to it
   std::queue<work_t> work_queue;

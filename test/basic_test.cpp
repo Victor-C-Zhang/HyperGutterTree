@@ -1,11 +1,35 @@
 #include <gtest/gtest.h>
 #include <math.h>
-#include <set>
+#include <thread>
 #include "../include/buffer_tree.h"
 
 #define KB 1 << 10
 #define MB 1 << 20
 #define GB 1 << 30
+
+static bool shutdown = false;
+
+// queries the buffer tree and verifies that the data
+// returned makes sense
+// Should be run in a seperate thread
+void querier(BufferTree *buf_tree, int nodes) {
+  printf("creating query thread for buffertree\n");
+  data_ret_t data;
+  while(true) {
+    bool valid = buf_tree->get_data(shutdown, data);
+    if (valid) {
+      Node key = data.first;
+      std::vector<Node> updates = data.second;
+      // verify that the updates are all between the correct nodes
+      for (Node upd : updates) {
+        // printf("edge to %d\n", upd.first);
+        ASSERT_EQ(nodes - (key + 1), upd) << "key " << key;
+      }
+    }
+    else if(shutdown)
+      return;
+  }
+}
 
 // helper function to run a basic test of the buffer tree with
 // various parameters
@@ -16,8 +40,11 @@ void run_test(const int nodes, const int num_updates, const int buffer_size, con
   printf("Running Test: nodes=%i num_updates=%i buffer_size %i branch_factor %i\n",
          nodes, num_updates, buffer_size, branch_factor);
 
-  BufferTree *buf_tree = new BufferTree("./test_", buffer_size, branch_factor, nodes, true);
+  BufferTree *buf_tree = new BufferTree("./test_", buffer_size, branch_factor, nodes, 1, true);
+  shutdown = false;
+  std::thread qworker(querier, buf_tree, nodes);
 
+  printf("inserting updates to buffer tree\n");
   for (int i = 0; i < num_updates; i++) {
     update_t upd;
     upd.first = i % nodes;
@@ -25,37 +52,9 @@ void run_test(const int nodes, const int num_updates, const int buffer_size, con
     buf_tree->insert(upd);
   }
   buf_tree->force_flush();
+  shutdown = true;
 
-  std::set<Node> visited;
-
-  // calculate the tag index for node 0 based upon max_level and max_buffer_size
-  work_t task;
-  while (!buf_tree->work_queue.empty()) {
-    task = buf_tree->work_queue.front();
-    buf_tree->work_queue.pop();
-
-    if (visited.count(task.first) > 0) {
-      continue;
-    }
-    visited.insert(task.first);
-    
-    // do the query
-    data_ret_t ret = buf_tree->get_data(task);
-    Node key = ret.first;
-    std::vector<Node> updates = ret.second;
-    // how many updates to we expect to see to each node
-    int per_node = num_updates / nodes;
-
-    int count = 0;
-
-    for (Node upd : updates) {
-      // printf("edge to %d\n", upd.first);
-      ASSERT_EQ(nodes - (key + 1), upd) << "key " << key;
-      count++;
-    }
-    ASSERT_EQ(per_node, count) << "key " << key;
-  }
-  
+  qworker.join();
   delete buf_tree;
 }
 
