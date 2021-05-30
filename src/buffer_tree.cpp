@@ -302,7 +302,6 @@ flush_ret_t inline BufferTree::flush_root() {
 		flush_queue1.pop();
 		flush_control_block(to_flush);
 	}
-
 }
 
 flush_ret_t inline BufferTree::flush_control_block(BufferControlBlock *bcb) {

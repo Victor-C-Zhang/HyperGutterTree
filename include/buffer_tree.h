@@ -112,11 +112,6 @@ public:
    */
   bool get_data(bool noBlock, data_ret_t &data);
 
-  // queue of work which needs to be done and the locks which control access to it
-  std::queue<work_t> work_queue;
-  std::mutex queue_lock;
-  std::condition_variable queue_cond;
-
   /**
    * Flushes the entire tree down to the leaves.
    * @return nothing.
