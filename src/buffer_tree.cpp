@@ -353,12 +353,15 @@ bool BufferTree::get_data(data_ret_t &data) {
 	bool got_data = cq->peek(queue_data);
 
 	if (!got_data)
-		return false; // we got no data so return empty
+		return false; // we got no data so return not valid
 
 	int i         = queue_data.first;
 	queue_elm elm = queue_data.second;
 	char *serial_data = elm.data;
 	uint32_t len      = elm.size;
+
+	if (len == 0)
+		return false; // we got no data so return not valid
 
 	data.second.clear(); // remove any old data from the vector
 	uint32_t vec_len  = len / serial_update_size;
