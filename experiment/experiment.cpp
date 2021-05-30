@@ -17,7 +17,7 @@ void querier(BufferTree *buf_tree, int nodes) {
   printf("creating query thread for buffertree\n");
   data_ret_t data;
   while(true) {
-    bool valid = buf_tree->get_data(shutdown, data);
+    bool valid = buf_tree->get_data(data);
     if (valid) {
       Node key = data.first;
       std::vector<Node> updates = data.second;

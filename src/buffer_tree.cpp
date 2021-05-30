@@ -345,12 +345,12 @@ flush_ret_t inline BufferTree::flush_control_block(BufferControlBlock *bcb) {
 
 // ask the buffer tree for data
 // this function may sleep until data is available
-bool BufferTree::get_data(bool noBlock, data_ret_t &data) {
+bool BufferTree::get_data(data_ret_t &data) {
 	File_Pointer idx = 0;
 
 	// make a request to the circular buffer for data
 	std::pair<int, queue_elm> queue_data;
-	bool got_data = cq->peek(noBlock, queue_data);
+	bool got_data = cq->peek(queue_data);
 
 	if (!got_data)
 		return false; // we got no data so return empty
@@ -400,6 +400,6 @@ flush_ret_t BufferTree::force_flush() {
 }
 
 void BufferTree::bypass_wait() {
-	cq->cirq_full.notify_all();
+	cq->no_block = true; // circular queue operations should no longer block
 	cq->cirq_empty.notify_all();
 }

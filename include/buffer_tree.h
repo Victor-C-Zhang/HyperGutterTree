@@ -106,11 +106,10 @@ public:
 
   /*
    * Ask the buffer tree for data and sleep if necessary until it is available.
-   * @param no_block   if false then block the current thread until data is available.
    * @param data       this is where to the key and vector of updates associated with it
    * @return           true true if got valid data, false if unable to get data.
    */
-  bool get_data(bool no_block, data_ret_t &data);
+  bool get_data(data_ret_t &data);
 
   /**
    * Flushes the entire tree down to the leaves.

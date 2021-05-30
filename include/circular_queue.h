@@ -27,7 +27,7 @@ public:
 	void push(char *elm, int size);              
 	
 	// get data from the queue for processing
-	bool peek(bool noBlock, std::pair<int, queue_elm> &ret);
+	bool peek(std::pair<int, queue_elm> &ret);
 	
 	// mark the queue element i as ready to be overwritten.
 	// Call pop after processing the data from peek
@@ -38,6 +38,10 @@ public:
 
 	std::condition_variable cirq_empty;
 	std::mutex read_lock;
+
+	// should CircularQueue peeks wait until they can succeed(false)
+	// or return false on failure (true)
+	bool no_block;
 private:
 	int len;      // maximum number of data elements to be stored in the queue
 	int elm_size; // size of an individual element in bytes

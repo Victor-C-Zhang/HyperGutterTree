@@ -16,7 +16,7 @@ void querier(BufferTree *buf_tree, int nodes) {
   printf("creating query thread for buffertree\n");
   data_ret_t data;
   while(true) {
-    bool valid = buf_tree->get_data(shutdown, data);
+    bool valid = buf_tree->get_data(data);
     if (valid) {
       Node key = data.first;
       std::vector<Node> updates = data.second;
@@ -53,7 +53,7 @@ void run_test(const int nodes, const int num_updates, const int buffer_size, con
   }
   buf_tree->force_flush();
   shutdown = true;
-  buf_tree->bypass_wait(); // tell any waiting threads to reset
+  buf_tree->bypass_wait(); // switch to non-blocking calls in an effort to exit
 
   qworker.join();
   delete buf_tree;

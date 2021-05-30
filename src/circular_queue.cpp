@@ -49,13 +49,10 @@ void CircularQueue::push(char *elm, int size) {
 	}
 }
 
-bool CircularQueue::peek(bool no_block, std::pair<int, queue_elm> &ret) {
+bool CircularQueue::peek(std::pair<int, queue_elm> &ret) {
 	do {
-		// here we automatically wake back up after half a second. This is to address
-		// the case where the querying thread is so fast that it has emptied the
-		// queue before we can tell it to run no_block
 		std::unique_lock<std::mutex> lk(read_lock);
-		cirq_empty.wait_for(lk, std::chrono::milliseconds(500), [this, no_block]{return (!empty() || no_block);});
+		cirq_empty.wait(lk, [this]{return (!empty() || no_block);});
 		if(!empty()) {
 			// printf("CQ: peek: got non-empty");
 			int temp = tail;
