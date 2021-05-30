@@ -3,6 +3,7 @@
 #include "../include/buffer_tree.h"
 
 #include <string.h>
+#include <chrono>
 
 CircularQueue::CircularQueue(int num_elements, int size_of_elm): 
   len(num_elements), elm_size(size_of_elm) {
@@ -48,11 +49,13 @@ void CircularQueue::push(char *elm, int size) {
 	}
 }
 
-bool CircularQueue::peek(bool noBlock, std::pair<int, queue_elm> &ret) {
+bool CircularQueue::peek(bool no_block, std::pair<int, queue_elm> &ret) {
 	do {
+		// here we automatically wake back up after half a second. This is to address
+		// the case where the querying thread is so fast that it has emptied the
+		// queue before we can tell it to run no_block
 		std::unique_lock<std::mutex> lk(read_lock);
-		// printf("CQ: peek: wait on not-empty\n");
-		cirq_empty.wait(lk, [this, noBlock]{return (!empty() || noBlock);});
+		cirq_empty.wait_for(lk, std::chrono::milliseconds(500), [this, no_block]{return (!empty() || no_block);});
 		if(!empty()) {
 			// printf("CQ: peek: got non-empty");
 			int temp = tail;
@@ -64,8 +67,8 @@ bool CircularQueue::peek(bool noBlock, std::pair<int, queue_elm> &ret) {
 			return true;
 		}
 		lk.unlock();
-	}while(!noBlock);
-	// printf("CQ: peek: EXITING without data due to noBlock\n");
+	}while(!no_block);
+	// printf("CQ: peek: EXITING without data due to no_block\n");
 	return false;
 }
 

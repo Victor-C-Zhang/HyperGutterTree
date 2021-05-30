@@ -54,7 +54,7 @@ nodes, int workers, bool reset=false) : dir(dir), M(size), B(b), N(nodes) {
 
 	// open the file which will be our backing store for the non-root nodes
 	// create it if it does not already exist
-	std::string file_name = dir + "buffer_tree_v0.1.data";
+	std::string file_name = dir + "buffer_tree_v0.2.data";
 	printf("opening file %s\n", file_name.c_str());
 	backing_store = open(file_name.c_str(), file_flags, S_IRUSR | S_IWUSR);
 	if (backing_store == -1) {
@@ -397,4 +397,9 @@ flush_ret_t BufferTree::force_flush() {
 			flush_control_block(bcb);
 		}
 	}
+}
+
+void BufferTree::bypass_wait() {
+	cq->cirq_full.notify_all();
+	cq->cirq_empty.notify_all();
 }

@@ -53,6 +53,7 @@ void run_test(const int nodes, const int num_updates, const int buffer_size, con
   }
   buf_tree->force_flush();
   shutdown = true;
+  buf_tree->bypass_wait(); // tell any waiting threads to reset
 
   qworker.join();
   delete buf_tree;
