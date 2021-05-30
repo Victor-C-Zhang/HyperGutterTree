@@ -320,7 +320,7 @@ flush_ret_t inline BufferTree::flush_control_block(BufferControlBlock *bcb) {
 		offset += len;
 	}
 
-	if (bcb->min_key == bcb->max_key) { // this is a leaf node
+	if (bcb->min_key == bcb->max_key && bcb->size() > 0) { // this is a leaf node
 		// printf("adding key %i from buffer %i to circular queue\n", bcb->min_key, bcb->get_id());
 		cq->push(data, bcb->size()); // add data to the circular queue
 		
@@ -365,7 +365,7 @@ bool BufferTree::get_data(data_ret_t &data) {
 	data.second.reserve(vec_len); // reserve space for our updates
 
 	// assume the first key is correct so extract it
-	Node key = deserialize_update(serial_data).first;
+	Node key = load_key(serial_data);
 	data.first = key;
 
 	while(idx < (uint64_t) len) {
