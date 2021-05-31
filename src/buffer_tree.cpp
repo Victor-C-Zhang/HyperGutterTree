@@ -24,7 +24,7 @@ int      BufferTree::backing_store;
  * We assume that node indices begin at 0 and increase to N-1
  */
 BufferTree::BufferTree(std::string dir, uint32_t size, uint32_t b, Node
-nodes, bool reset=false) : dir(dir), M(size), B(b), N(nodes) {
+nodes, int workers, bool reset=false) : dir(dir), M(size), B(b), N(nodes) {
 	page_size = sysconf(_SC_PAGE_SIZE); // works on POSIX systems (alternative is boost)
 	int file_flags = O_RDWR | O_CREAT; // direct memory O_DIRECT may or may not be good
 	if (reset) {
@@ -39,7 +39,7 @@ nodes, bool reset=false) : dir(dir), M(size), B(b), N(nodes) {
 	// malloc the memory for the flush buffers
 	flush_buffers = (char **) malloc(sizeof(char *) * B);
 	for (uint i = 0; i < B; i++) {
-		flush_buffers[i] = (char *) calloc(page_size, sizeof(char *));
+		flush_buffers[i] = (char *) calloc(page_size, sizeof(char));
 	}
 	
 	// setup static variables
@@ -54,7 +54,7 @@ nodes, bool reset=false) : dir(dir), M(size), B(b), N(nodes) {
 
 	// open the file which will be our backing store for the non-root nodes
 	// create it if it does not already exist
-	std::string file_name = dir + "buffer_tree_v0.1.data";
+	std::string file_name = dir + "buffer_tree_v0.2.data";
 	printf("opening file %s\n", file_name.c_str());
 	backing_store = open(file_name.c_str(), file_flags, S_IRUSR | S_IWUSR);
 	if (backing_store == -1) {
@@ -63,6 +63,10 @@ nodes, bool reset=false) : dir(dir), M(size), B(b), N(nodes) {
 	}
 
 	setup_tree(); // setup the buffer tree
+
+	// create the circular queue in which we will place ripe fruit (full leaves)
+	// make space for full 2 * workers full updates
+	cq = new CircularQueue(2*workers, 2*M);
 	
 	// will want to use mmap instead? - how much is in RAM after allocation (none?)
 	// can't use mmap instead might use it as well. (Still need to create the file to be a given size)
@@ -130,9 +134,9 @@ void BufferTree::setup_tree() {
 			}
 
 			BufferControlBlock *bcb = new BufferControlBlock(start + index, size + max_buffer_size*index, l);
-	 		bcb->min_key     = key;
-	 		key              += ceil(parent_keys/options);
-			bcb->max_key     = key - 1;
+	 		bcb->min_key            = key;
+	 		key                     += ceil(parent_keys/options);
+			bcb->max_key            = key - 1;
 			if (l != 1)
 				buffers[prev]->add_child(start + index);
 			
@@ -237,7 +241,7 @@ flush_ret_t BufferTree::do_flush(char *data, uint32_t data_size, uint32_t begin,
 	char *data_start = data;
 	char **flush_positions = (char **) malloc(sizeof(char *) * B); // TODO move malloc out of this function
 	for (uint i = 0; i < B; i++) {
-		flush_positions[i] = flush_buffers[i]; // TODO this casting is annoying (just convert everything to update_t type?)
+		flush_positions[i] = flush_buffers[i];
 	}
 
 	while (data - data_start < data_size) {
@@ -247,15 +251,12 @@ flush_ret_t BufferTree::do_flush(char *data, uint32_t data_size, uint32_t begin,
 			printf("ERROR: incorrect child %u abandoning insert key=%lu min=%lu max=%lu\n", child, key, min_key, max_key);
 			printf("first child = %u\n", buffers[begin]->get_id());
 			printf("data pointer = %lu data_start=%lu data_size=%u\n", (uint64_t) data, (uint64_t) data_start, data_size);
-			data += serial_update_size;
-			exit(EXIT_SUCCESS);
-			continue;
+			throw KeyIncorrectError();
 		}
 		if (buffers[child+begin]->min_key > key || buffers[child+begin]->max_key < key) {
-			printf("ERROR: bad key %lu for child %u, child min = %lu, max = %lu abandoning insert\n", 
+			printf("ERROR: bad key %lu for child %u, child min = %lu, max = %lu\n", 
 				key, child, buffers[child+begin]->min_key, buffers[child+begin]->max_key);
-			data += serial_update_size;
-			continue;
+			throw KeyIncorrectError();
 		}
  
 		copy_serial(data, flush_positions[child]);
@@ -298,19 +299,9 @@ flush_ret_t inline BufferTree::flush_root() {
 		flush_queue1.pop();
 		flush_control_block(to_flush);
 	}
-
 }
 
 flush_ret_t inline BufferTree::flush_control_block(BufferControlBlock *bcb) {
-	if (bcb->min_key == bcb->max_key) { // this is a leaf node
-		// printf("adding key %i from buffer %i to work queue\n", bcb->min_key, bcb->get_id());
-		std::unique_lock<std::mutex> lk(queue_lock);
-		work_queue.push(bcb->work_info());
-		lk.unlock();
-		queue_cond.notify_one();
-		return;
-	}
-
 	//printf("flushing "); bcb->print();
 
 	char *data = (char *) malloc(max_buffer_size); // TODO malloc only once instead of per call
@@ -325,6 +316,16 @@ flush_ret_t inline BufferTree::flush_control_block(BufferControlBlock *bcb) {
 		data_to_read -= len;
 		offset += len;
 	}
+
+	if (bcb->min_key == bcb->max_key && bcb->size() > 0) { // this is a leaf node
+		// printf("adding key %i from buffer %i to circular queue\n", bcb->min_key, bcb->get_id());
+		cq->push(data, bcb->size()); // add data to the circular queue
+		
+		// reset the BufferControlBlock (we have emptied it of data)
+		bcb->reset();
+		return;
+	}
+
 	// printf("read %lu bytes\n", len);
 
 	do_flush(data, bcb->size(), bcb->first_child, bcb->min_key, bcb->max_key, bcb->children_num, flush_queue_wild);
@@ -339,45 +340,54 @@ flush_ret_t inline BufferTree::flush_control_block(BufferControlBlock *bcb) {
 	}
 }
 
-// load data from buffer memory location so long as the key matches
-// what we expect
-data_ret_t BufferTree::get_data(work_t task) {
-	data_ret_t data;
-	Node key = task.first;
+// ask the buffer tree for data
+// this function may sleep until data is available
+bool BufferTree::get_data(data_ret_t &data) {
+	File_Pointer idx = 0;
+
+	// make a request to the circular buffer for data
+	std::pair<int, queue_elm> queue_data;
+	bool got_data = cq->peek(queue_data);
+
+	if (!got_data)
+		return false; // we got no data so return not valid
+
+	int i         = queue_data.first;
+	queue_elm elm = queue_data.second;
+	char *serial_data = elm.data;
+	uint32_t len      = elm.size;
+
+	if (len == 0)
+		return false; // we got no data so return not valid
+
+	data.second.clear(); // remove any old data from the vector
+	uint32_t vec_len  = len / serial_update_size;
+	data.second.reserve(vec_len); // reserve space for our updates
+
+	// assume the first key is correct so extract it
+	Node key = load_key(serial_data);
 	data.first = key;
-	File_Pointer off = 0;
-	BufferControlBlock *bcb = buffers[task.second];
 
-	// printf("getting data from positon %u and for key %u\n", task.second, key);
-
-	char *serial_data = (char *) malloc(bcb->size());
-	int len = pread(backing_store, serial_data, bcb->size(), bcb->offset());
-	// printf("read %lu bytes\n", len);
-	if (len == -1) {
-		printf("ERROR get_data failed to read from buffer %i, %s\n", bcb->get_id(), strerror(errno));
-		return data;
-	}
-
-	while(off < (uint64_t)len) {
-		update_t upd = deserialize_update(serial_data + off);
-		// printf("got update: %u %u %i\n", upd.first.first, upd.first.second, upd.second);
+	while(idx < (uint64_t) len) {
+		update_t upd = deserialize_update(serial_data + idx);
+		// printf("got update: %lu %lu\n", upd.first, upd.second);
 		if (upd.first == 0 && upd.second == 0) {
-			break; // got a null entry so clear that out
+			break; // got a null entry so done
 		}
 
-		if (upd.first == key) {
-			// printf("query to node %d got edge to node %d\n", key, upd.first.second);
-			data.second.push_back(upd.second);
+		if (upd.first != key) {
+			// error to handle some weird unlikely buffer tree shenanigans
+			printf("source node %lu and key %lu do not match\n", upd.first, key);
+			throw KeyIncorrectError();
 		}
-		off += serial_update_size;
+
+		// printf("query to node %lu got edge to node %lu\n", key, upd.second);
+		data.second.push_back(upd.second);
+		idx += serial_update_size;
 	}
 
-	free(serial_data);
-
-	// reset the BufferControlBlock (we have emptied it of data)
-	bcb->reset();
-
-	return data;
+	cq->pop(i); // mark the cq entry as clean
+	return true;
 }
 
 flush_ret_t BufferTree::force_flush() {
@@ -388,15 +398,12 @@ flush_ret_t BufferTree::force_flush() {
 	
 	for (BufferControlBlock *bcb : buffers) {
 		if (bcb != nullptr) {
-			if (bcb->min_key == bcb->max_key) {
-				// printf("Flushing key %i from buffer %i to work queue\n", bcb->min_key, bcb->get_id());
-				std::unique_lock<std::mutex> lk(queue_lock);
-				work_queue.push(bcb->work_info());
-				lk.unlock();
-				queue_cond.notify_one();
-			} else {
-				flush_control_block(bcb);
-			}
+			flush_control_block(bcb);
 		}
 	}
+}
+
+void BufferTree::bypass_wait() {
+	cq->no_block = true; // circular queue operations should no longer block
+	cq->cirq_empty.notify_all();
 }
