@@ -8,14 +8,14 @@
 struct queue_elm {
 	bool dirty;    // is this queue element yet to be processed by sketching (if so do not overwrite)
 	uint32_t size; // the size of this data element
-	char *data;    // the data element which goes in the queue
+	char *data;    // a pointer to the data
 };
 
 /*
  * A circular queue of data elements.
  * Used in the bufferTree to place leaf data which is ready to be processed.
- * Has a finite size and will block operations which would either empty or
- * fill up the queue until they can proceed
+ * Has a finite size and will block operations which do not have the data
+ * that they need (either empty or full for peek and push respectively)
  */
 
 class CircularQueue {
@@ -49,8 +49,8 @@ private:
 	int head;     // where to push (starts at 0, write pointer)
 	int tail;     // where to peek (starts at 0, read pointer)
 	
-	queue_elm *queue_array; // array of char * which holds all the data
-
+	queue_elm *queue_array; // array queue_elm metadata
+	char *data_array;
 	inline int incr(int p) {return (p + 1) % len;}
 	inline bool full()     {return queue_array[head].dirty;} // if the next data item is dirty then full
 	inline bool empty()    {return (head == tail && !full());}

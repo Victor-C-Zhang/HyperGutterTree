@@ -12,8 +12,9 @@ CircularQueue::CircularQueue(int num_elements, int size_of_elm):
 
 	// malloc the memory for the circular queue
 	queue_array = (queue_elm *) malloc(sizeof(queue_elm) * len);
+	data_array = (char *) malloc(elm_size * len * sizeof(char));
 	for (int i = 0; i < len; i++) {
-		queue_array[i].data  = (char *) malloc(elm_size * sizeof(char));
+		queue_array[i].data  = data_array + (elm_size * i);
 		queue_array[i].dirty = false;
 		queue_array[i].size  = 0;
 	}
