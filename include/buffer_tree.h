@@ -192,5 +192,12 @@ public:
   }
 };
 
+class KeyIncorrectError : public std::exception {
+public:
+  virtual const char * what() const throw() {
+    return "The key was not correct for the associated buffer";
+  }
+};
+
 
 #endif //FASTBUFFERTREE_BUFFER_TREE_H

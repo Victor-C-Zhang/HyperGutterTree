@@ -50,7 +50,7 @@ private:
 	int tail;     // where to peek (starts at 0, read pointer)
 	
 	queue_elm *queue_array; // array queue_elm metadata
-	char *data_array;
+	char *data_array;       // the actual data
 	inline int incr(int p) {return (p + 1) % len;}
 	inline bool full()     {return queue_array[head].dirty;} // if the next data item is dirty then full
 	inline bool empty()    {return (head == tail && !full());}

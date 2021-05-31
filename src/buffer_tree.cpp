@@ -247,19 +247,16 @@ flush_ret_t BufferTree::do_flush(char *data, uint32_t data_size, uint32_t begin,
 	while (data - data_start < data_size) {
 		Node key = load_key(data);
 		uint32_t child  = which_child(key, min_key, max_key, options);
-		if (child > B - 1) {
+		if (child > B - 1 || ) {
 			printf("ERROR: incorrect child %u abandoning insert key=%lu min=%lu max=%lu\n", child, key, min_key, max_key);
 			printf("first child = %u\n", buffers[begin]->get_id());
 			printf("data pointer = %lu data_start=%lu data_size=%u\n", (uint64_t) data, (uint64_t) data_start, data_size);
-			data += serial_update_size;
-			exit(EXIT_SUCCESS);
-			continue;
+			throw KeyIncorrectError();
 		}
 		if (buffers[child+begin]->min_key > key || buffers[child+begin]->max_key < key) {
-			printf("ERROR: bad key %lu for child %u, child min = %lu, max = %lu abandoning insert\n", 
+			printf("ERROR: bad key %lu for child %u, child min = %lu, max = %lu\n", 
 				key, child, buffers[child+begin]->min_key, buffers[child+begin]->max_key);
-			data += serial_update_size;
-			continue;
+			throw KeyIncorrectError();
 		}
  
 		copy_serial(data, flush_positions[child]);
@@ -378,10 +375,14 @@ bool BufferTree::get_data(data_ret_t &data) {
 			break; // got a null entry so done
 		}
 
-		if (upd.first == key) {
-			// printf("query to node %lu got edge to node %lu\n", key, upd.second);
-			data.second.push_back(upd.second);
+		if (upd.first != key) {
+			// error to handle some weird unlikely buffer tree shenanigans
+			printf("source node %lu and key %lu do not match\n", upd.first, key);
+			throw KeyIncorrectError();
 		}
+
+		// printf("query to node %lu got edge to node %lu\n", key, upd.second);
+		data.second.push_back(upd.second);
 		idx += serial_update_size;
 	}
 
