@@ -14,8 +14,8 @@ struct queue_elm {
 /*
  * A circular queue of data elements.
  * Used in the bufferTree to place leaf data which is ready to be processed.
- * Has a finite size and will block operations which do not have the data
- * that they need (either empty or full for peek and push respectively)
+ * Has a finite size and will block operations which do not have what they
+ * need need (either empty or full for peek and push respectively)
  */
 
 class CircularQueue {
