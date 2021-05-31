@@ -247,7 +247,7 @@ flush_ret_t BufferTree::do_flush(char *data, uint32_t data_size, uint32_t begin,
 	while (data - data_start < data_size) {
 		Node key = load_key(data);
 		uint32_t child  = which_child(key, min_key, max_key, options);
-		if (child > B - 1 || ) {
+		if (child > B - 1) {
 			printf("ERROR: incorrect child %u abandoning insert key=%lu min=%lu max=%lu\n", child, key, min_key, max_key);
 			printf("first child = %u\n", buffers[begin]->get_id());
 			printf("data pointer = %lu data_start=%lu data_size=%u\n", (uint64_t) data, (uint64_t) data_start, data_size);
