@@ -31,7 +31,7 @@ public:
 	
 	// mark the queue element i as ready to be overwritten.
 	// Call pop after processing the data from peek
-	void pop(int i);                             
+	void pop(int i);
 
 	std::condition_variable cirq_full;
 	std::mutex write_lock;

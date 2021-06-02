@@ -53,7 +53,7 @@ void run_test(const int nodes, const int num_updates, const int buffer_size, con
   }
   buf_tree->force_flush();
   shutdown = true;
-  buf_tree->bypass_wait(); // switch to non-blocking calls in an effort to exit
+  buf_tree->bypass_wait(true); // switch to non-blocking calls in an effort to exit
 
   qworker.join();
   delete buf_tree;
