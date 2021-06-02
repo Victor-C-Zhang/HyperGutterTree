@@ -9,6 +9,7 @@ CircularQueue::CircularQueue(int num_elements, int size_of_elm):
   len(num_elements), elm_size(size_of_elm) {
 	head = 0;
 	tail = 0;
+	no_block = false;
 
 	// malloc the memory for the circular queue
 	queue_array = (queue_elm *) malloc(sizeof(queue_elm) * len);
@@ -24,9 +25,7 @@ CircularQueue::CircularQueue(int num_elements, int size_of_elm):
 
 CircularQueue::~CircularQueue() {
 	// free the queue
-	for (int i = 0; i < len; i++) {
-		free(queue_array[i].data);
-	}
+	free(data_array);
 	free(queue_array);
 }
 

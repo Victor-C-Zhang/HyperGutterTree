@@ -52,6 +52,9 @@ nodes, int workers, bool reset=false) : dir(dir), M(size), B(b), N(nodes) {
 	root_node = (char *) malloc(max_buffer_size);
 	root_position = 0;
 
+	// malloc the memory to use for reading buffers
+	read_buffer = (char *) malloc(max_buffer_size);	
+
 	// open the file which will be our backing store for the non-root nodes
 	// create it if it does not already exist
 	std::string file_name = dir + "buffer_tree_v0.2.data";
@@ -86,12 +89,13 @@ BufferTree::~BufferTree() {
 	}
 	free(flush_buffers);
 	free(root_node);
+	free(read_buffer);
 
 	for(uint i = 0; i < buffers.size(); i++) {
 		if (buffers[i] != nullptr)
 			delete buffers[i];
 	}
-
+	delete cq;
 	close(backing_store);
 }
 
@@ -303,12 +307,10 @@ flush_ret_t inline BufferTree::flush_root() {
 
 flush_ret_t inline BufferTree::flush_control_block(BufferControlBlock *bcb) {
 	//printf("flushing "); bcb->print();
-
-	char *data = (char *) malloc(max_buffer_size); // TODO malloc only once instead of per call
 	uint32_t data_to_read = bcb->size();
 	uint32_t offset = 0;
 	while(data_to_read > 0) {
-		int len = pread(backing_store, data + offset, data_to_read, bcb->offset() + offset);
+		int len = pread(backing_store, read_buffer + offset, data_to_read, bcb->offset() + offset);
 		if (len == -1) {
 			printf("ERROR flush failed to read from buffer %i, %s\n", bcb->get_id(), strerror(errno));
 			return;
@@ -319,7 +321,7 @@ flush_ret_t inline BufferTree::flush_control_block(BufferControlBlock *bcb) {
 
 	if (bcb->min_key == bcb->max_key && bcb->size() > 0) { // this is a leaf node
 		// printf("adding key %i from buffer %i to circular queue\n", bcb->min_key, bcb->get_id());
-		cq->push(data, bcb->size()); // add data to the circular queue
+		cq->push(read_buffer, bcb->size()); // add the data we read to the circular queue
 		
 		// reset the BufferControlBlock (we have emptied it of data)
 		bcb->reset();
@@ -328,10 +330,8 @@ flush_ret_t inline BufferTree::flush_control_block(BufferControlBlock *bcb) {
 
 	// printf("read %lu bytes\n", len);
 
-	do_flush(data, bcb->size(), bcb->first_child, bcb->min_key, bcb->max_key, bcb->children_num, flush_queue_wild);
+	do_flush(read_buffer, bcb->size(), bcb->first_child, bcb->min_key, bcb->max_key, bcb->children_num, flush_queue_wild);
 	bcb->reset();
-
-	free(data);
 
 	while (!flush_queue_wild.empty()) { // REMOVE later ... synchronous approach
 		BufferControlBlock *to_flush = flush_queue_wild.front();

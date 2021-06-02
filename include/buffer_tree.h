@@ -53,8 +53,8 @@ private:
   std::queue<BufferControlBlock*> flush_queue1;     // level 1
   std::queue<BufferControlBlock*> flush_queue_wild; // level > 1
 
-  // utility to handle batching and writing to sketches
-  // SketchWriteManager sketchWriteManager;
+  // buffer which we use when reading in BufferControlBlocks
+  char *read_buffer;
 
   /*
    * root node and functions for handling it
