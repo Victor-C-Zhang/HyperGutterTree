@@ -123,11 +123,11 @@ public:
    * Useful when switching from blocking to non-blocking calls
    * to the circular queue
    * For example: we set this to true when shutting down the graph_workers
-   * @param    bypass is true if we should turn on non-blocking operations
+   * @param    block is true if we should turn on non-blocking operations
    *           and false if we should turn them off
    * @return   nothing
    */
-  void bypass_wait(bool bypass);
+  void set_non_block(bool block);
 
   /*
    * Function to convert an update_t to a char array
