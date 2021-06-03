@@ -49,7 +49,7 @@ nodes, int workers, bool reset=false) : dir(dir), M(size), B(b), N(nodes) {
 	max_buffer_size = 2 * M;
 	backing_EOF     = 0;
 	leaf_size       = floor(24 * pow(log(N) / log(2), 3)); // size of leaf proportional to size of sketch
-	leaf_size       = (leaf_size < page_size)? page_size : leaf_size; //enforce at least 2 * page_size big
+	leaf_size       = (leaf_size < page_size)? page_size : leaf_size; //enforce size of at least page_size
 
 	// malloc the memory for the root node
 	root_node = (char *) malloc(buffer_size);
@@ -170,7 +170,7 @@ void BufferTree::setup_tree() {
     #endif
     
     backing_EOF = size;
-    print_tree(buffers);
+    // print_tree(buffers);
 }
 
 // serialize an update to a data location (should only be used for root I think)
@@ -427,7 +427,7 @@ bool BufferTree::get_data(data_ret_t &data) {
 
 flush_ret_t BufferTree::force_flush() {
 	// printf("Force flush\n");
-	flush_root();       
+	flush_root();
 	// loop through each of the bufferControlBlocks and flush it
 	// looping from 0 on should force a top to bottom flush (if we do this right)
 	

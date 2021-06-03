@@ -58,7 +58,7 @@ private:
 
   // buffer we use when we need to flush within a flush
   // we only have one right now because this should only
-  // ever happen for children
+  // ever happen for leaves
   char *backup_read_buffer;
 
   /*
@@ -91,7 +91,7 @@ private:
    * @return       nothing
    */
   flush_ret_t flush_leaf(BufferControlBlock *leaf);
-  
+
   // Circular queue in which we place leaves that fill up
   CircularQueue *cq;
 
