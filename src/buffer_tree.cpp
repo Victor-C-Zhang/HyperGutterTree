@@ -14,6 +14,7 @@ uint8_t  BufferTree::max_level;
 uint32_t BufferTree::max_buffer_size;
 uint32_t BufferTree::buffer_size;
 uint64_t BufferTree::backing_EOF;
+uint64_t BufferTree::leaf_size;
 int      BufferTree::backing_store;
 
 
@@ -62,6 +63,12 @@ nodes, bool reset=false) : dir(dir), M(size), B(b), N(nodes) {
 		exit(1);
 	}
 
+	// set the size of the leaves to the size of each node sketch
+	// and if this somehow ends up being too small
+	// set the leaf_size to serial_update_size
+	leaf_size = floor(24 * pow(log(N) / log(2), 3));
+	leaf_size = (leaf_size < serial_update_size)? serial_update_size : leaf_size;
+
 	setup_tree(); // setup the buffer tree
 	
 	// will want to use mmap instead? - how much is in RAM after allocation (none?)
@@ -100,13 +107,7 @@ void print_tree(std::vector<BufferControlBlock *>bcb_list) {
 
 // TODO: clean up this function
 void BufferTree::setup_tree() {
-	double sketch_size = 24 * pow(log(N) / log(2), 3);
-	uint32_t basement_size = ceil((double) M / sketch_size); // maximum number of graph nodes in a basement node
-	uint32_t node_num = ceil((double)N / ((double) M / sketch_size)); // number of basement nodes
-	// basement nodes contain the updates for multiple graph nodes within them.
-	// technically they will be converted to multiple bufferControlBlocks of reduced size
-
-	max_level = ceil(log(node_num) / log(B));
+	max_level = ceil(log(N) / log(B));
 	printf("Creating a tree of depth %i\n", max_level);
 	File_Pointer size = 0;
 
@@ -136,14 +137,9 @@ void BufferTree::setup_tree() {
 				continue;
 			}
 
-			// if basement then create enough nodes to cover the number of children needed
-			// then add_child for all these nodes.
-
-
-			// if not a basement node. Then do normal stuff.
-			BufferControlBlock *bcb = new BufferControlBlock(start + index, size + max_buffer_size*index, l);
+			BufferControlBlock *bcb = new BufferControlBlock(start + index, size, l);
 	 		bcb->min_key     = key;
-	 		key              += ceil(parent_keys/options); // TODO: need to modify this to consider basement node granularity
+	 		key              += ceil(parent_keys/options);
 			bcb->max_key     = key - 1;
 			if (l != 1)
 				buffers[parent]->add_child(start + index);
@@ -152,8 +148,11 @@ void BufferTree::setup_tree() {
 			options--;
 			buffers.push_back(bcb);
 			index++; // seperate variable because sometimes we skip stuff
+			if(bcb->is_leaf())
+				size += 2 * leaf_size;
+			else 
+				size += max_buffer_size;
 		}
-		size += max_buffer_size * index;
 	}
 
     // allocate file space for all the nodes to prevent fragmentation
@@ -164,7 +163,7 @@ void BufferTree::setup_tree() {
     #endif
     
     backing_EOF = size;
-    // print_tree(buffers);
+    print_tree(buffers);
 }
 
 // serialize an update to a data location (should only be used for root I think)

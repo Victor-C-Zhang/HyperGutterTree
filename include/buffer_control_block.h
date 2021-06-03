@@ -95,6 +95,8 @@ public:
    */
   void flush();
 
+  inline bool is_leaf()  {return min_key == max_key;}
+
   inline void reset() {storage_ptr = 0;}
   inline buffer_id_t get_id() {return id;}
   inline work_t work_info() {return work_t(min_key, id);}

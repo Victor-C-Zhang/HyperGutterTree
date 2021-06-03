@@ -185,6 +185,7 @@ public:
   static uint32_t max_buffer_size;
   static uint32_t buffer_size;
   static uint64_t backing_EOF;
+  static uint64_t leaf_size;
   /*
    * File descriptor of backing file for storage
    */
