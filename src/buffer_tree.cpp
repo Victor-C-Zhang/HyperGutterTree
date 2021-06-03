@@ -403,7 +403,12 @@ flush_ret_t BufferTree::force_flush() {
 	}
 }
 
-void BufferTree::bypass_wait() {
-	cq->no_block = true; // circular queue operations should no longer block
-	cq->cirq_empty.notify_all();
+void BufferTree::set_non_block(bool block) {
+	if (block) {
+		cq->no_block = true; // circular queue operations should no longer block
+		cq->cirq_empty.notify_all();
+	}
+	else {
+		cq->no_block = false; // set circular queue to block if necessary
+	}
 }
