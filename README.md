@@ -63,4 +63,4 @@ The structure of the CircularQueue is as follows
                    ^ Head                                ^ Tail
 ```
 
-`Head` marks the where the next insertion to the CircularQueue should take place and `Tail` marks where the next read should happen from. Slots are marked `clean` if their data has been taken out of the queue and processed and the queue is full if the head ever points to a `dirty` slot.
+`Head` marks the where the next insertion to the CircularQueue should take place and `Tail` marks where the next read should happen from. Slots are marked `clean` if their data has been taken out of the queue and processed. The queue is full if the head ever points to a `dirty` slot and empty if `Head` and `Tail` point to the same slot (which is also clean).
