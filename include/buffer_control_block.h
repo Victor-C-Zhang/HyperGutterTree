@@ -14,7 +14,6 @@
 
 typedef uint32_t buffer_id_t;
 typedef uint64_t File_Pointer;
-typedef std::pair<Node, buffer_id_t> work_t;
 
 /**
  * Buffer metadata class. Care should be taken to synchronize access to the
@@ -99,7 +98,6 @@ public:
 
   inline void reset() {storage_ptr = 0;}
   inline buffer_id_t get_id() {return id;}
-  inline work_t work_info() {return work_t(min_key, id);}
   inline File_Pointer size() {return storage_ptr;}
   inline File_Pointer offset() {return file_offset;}
   inline void add_child(buffer_id_t child) {

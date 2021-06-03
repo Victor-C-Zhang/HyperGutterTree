@@ -9,6 +9,7 @@
 #include <math.h>
 #include "update.h"
 #include "buffer_control_block.h"
+#include "circular_queue.h"
 
 typedef void insert_ret_t;
 typedef void flush_ret_t;
@@ -52,8 +53,8 @@ private:
   std::queue<BufferControlBlock*> flush_queue1;     // level 1
   std::queue<BufferControlBlock*> flush_queue_wild; // level > 1
 
-  // utility to handle batching and writing to sketches
-  // SketchWriteManager sketchWriteManager;
+  // buffer which we use when reading in BufferControlBlocks
+  char *read_buffer;
 
   /*
    * root node and functions for handling it
@@ -78,6 +79,9 @@ private:
    */
   flush_ret_t do_flush(char *data, uint32_t size, uint32_t begin, Node min_key, Node max_key, uint8_t options, std::queue<BufferControlBlock *> &fq);
 
+  // Circular queue in which we place leaves that fill up
+  CircularQueue *cq;
+
 public:
   /**
    * Generates a new homebrew buffer tree.
@@ -88,9 +92,10 @@ public:
    *                the true buffer size, which can be between size and 2*size.
    * @param b       branching factor.
    * @param nodes   number of nodes in the graph
+   * @param workers the number of workers which will be using this buffer tree (defaults to 1)
    * @param reset   should truncate the file storage upon opening
    */
-  BufferTree(std::string dir, uint32_t size, uint32_t b, Node nodes, bool reset);
+  BufferTree(std::string dir, uint32_t size, uint32_t b, Node nodes, int workers, bool reset);
   ~BufferTree();
   /**
    * Puts an update into the data structure.
@@ -100,16 +105,11 @@ public:
   insert_ret_t insert(update_t upd);
 
   /*
-   * Get data from the buffertree given a description of where the data is
-   * @param  task   Where the data we want to extract can be found and which key
-   * @retuns a vector of updates associated with the key
+   * Ask the buffer tree for data and sleep if necessary until it is available.
+   * @param data       this is where to the key and vector of updates associated with it
+   * @return           true true if got valid data, false if unable to get data.
    */
-  data_ret_t get_data(work_t task);
-
-  // queue of work which needs to be done and the locks which control access to it
-  std::queue<work_t> work_queue;
-  std::mutex queue_lock;
-  std::condition_variable queue_cond;
+  bool get_data(data_ret_t &data);
 
   /**
    * Flushes the entire tree down to the leaves.
@@ -118,26 +118,14 @@ public:
   flush_ret_t force_flush();
 
   /*
-   * Flushes the buffer:
-   * 0. Checks if the root buffer is busy. If it is, wait until not busy.
-   *    Lock the root.
-   * 1. If the buffer is not stored in memory, read into memory.
-   * 2. If the root is a leaf buffer:
-   *      a. Collate and write_updates().
-   *      b. Unlock the root and RETURN.
-   * 2. Run heavy-hitters algorithm.
-   * 3. write_updates() to heavy hitters, leaving gaps in the buffer where
-   *    the elements were.
-   * 4. Find fixed pivots within buffer to split data on.
-   * 5. Locks children that need to be written to.
-   * 6. File-appends elements to children buffers. Updates storage pointers
-   *    of children. If any children have over M elements, add them to the
-   *    flush queue.
-   * 7. Resets storage pointer of root buffer to 0 and free the auxiliary
-   *    memory used to store the buffer.
-   * 8. Unlock children and root (in that order, please) and RETURN.
+   * Notifies all threads waiting on condition variables that 
+   * they should check their wait condition again
+   * Useful when switching from blocking to non-blocking calls
+   * to the circular queue
+   * For example: we use this when shutting down the graph_workers\
+   * @return   nothing
    */
-  flush_ret_t flush();
+  void bypass_wait();
 
   /*
    * Function to convert an update_t to a char array
@@ -202,6 +190,13 @@ public:
       return "Root buffer is full";
     else
       return "Non-Root buffer is full";
+  }
+};
+
+class KeyIncorrectError : public std::exception {
+public:
+  virtual const char * what() const throw() {
+    return "The key was not correct for the associated buffer";
   }
 };
 
