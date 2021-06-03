@@ -48,13 +48,16 @@ nodes, int workers, bool reset=false) : dir(dir), M(size), B(b), N(nodes) {
 	buffer_size     = M; // probably figure out a better solution than this
 	max_buffer_size = 2 * M;
 	backing_EOF     = 0;
+	leaf_size       = floor(24 * pow(log(N) / log(2), 3)); // size of leaf proportional to size of sketch
+	leaf_size       = (leaf_size < page_size)? page_size : leaf_size; //enforce at least 2 * page_size big
 
 	// malloc the memory for the root node
-	root_node = (char *) malloc(max_buffer_size);
+	root_node = (char *) malloc(buffer_size);
 	root_position = 0;
 
 	// malloc the memory to use for reading buffers
 	read_buffer = (char *) malloc(max_buffer_size);	
+	backup_read_buffer = (char *) malloc(2 * leaf_size);
 
 	// open the file which will be our backing store for the non-root nodes
 	// create it if it does not already exist
@@ -65,12 +68,6 @@ nodes, int workers, bool reset=false) : dir(dir), M(size), B(b), N(nodes) {
 		fprintf(stderr, "Failed to open backing storage file! error=%s\n", strerror(errno));
 		exit(1);
 	}
-
-	// set the size of the leaves to the size of each node sketch
-	// and if this somehow ends up being too small
-	// set the leaf_size to serial_update_size
-	leaf_size = floor(24 * pow(log(N) / log(2), 3));
-	leaf_size = (leaf_size < serial_update_size)? serial_update_size : leaf_size;
 
 	setup_tree(); // setup the buffer tree
 
@@ -97,6 +94,7 @@ BufferTree::~BufferTree() {
 	free(flush_buffers);
 	free(root_node);
 	free(read_buffer);
+	free(backup_read_buffer);
 
 	for(uint i = 0; i < buffers.size(); i++) {
 		if (buffers[i] != nullptr)
@@ -212,15 +210,14 @@ inline Node BufferTree::load_key(char *location) {
  */
 insert_ret_t BufferTree::insert(update_t upd) {
 	// printf("inserting to buffer tree . . . ");
-	root_lock.lock();
-	if (root_position + serial_update_size > 2 * M) {
-		flush_root(); // synchronous approach for testing
-		// throw BufferFullError(-1); // TODO maybe replace with synchronous flush
+	// root_lock.lock();
+	if (root_position + serial_update_size > M) {
+		flush_root();
 	}
 
 	serialize_update(root_node + root_position, upd);
 	root_position += serial_update_size;
-	root_lock.unlock();
+	// root_lock.unlock();
 	// printf("done insert\n");
 }
 
@@ -283,7 +280,10 @@ flush_ret_t BufferTree::do_flush(char *data, uint32_t data_size, uint32_t begin,
 			// write to our child, return value indicates if it needs to be flushed
 			uint size = flush_positions[child] - flush_buffers[child];
 			if(buffers[begin+child]->write(flush_buffers[child], size)) {
-				fq.push(buffers[begin+child]);
+				if (buffers[begin+child]->is_leaf())
+					flush_leaf(buffers[begin+child]);
+				else
+					fq.push(buffers[begin+child]);
 			}
 
 			flush_positions[child] = flush_buffers[child]; // reset the flush_position
@@ -332,7 +332,7 @@ flush_ret_t inline BufferTree::flush_control_block(BufferControlBlock *bcb) {
 		offset += len;
 	}
 
-	if (bcb->min_key == bcb->max_key && bcb->size() > 0) { // this is a leaf node
+	if (bcb->is_leaf() && bcb->size() > 0) { // this is a leaf node
 		// printf("adding key %i from buffer %i to circular queue\n", bcb->min_key, bcb->get_id());
 		cq->push(read_buffer, bcb->size()); // add the data we read to the circular queue
 		
@@ -351,6 +351,28 @@ flush_ret_t inline BufferTree::flush_control_block(BufferControlBlock *bcb) {
 		flush_queue_wild.pop();
 		flush_control_block(to_flush);
 	}
+}
+
+flush_ret_t inline BufferTree::flush_leaf(BufferControlBlock *leaf) {
+	uint32_t data_to_read = leaf->size();
+	uint32_t offset = 0;
+
+	while(data_to_read > 0) {
+		int len = pread(backing_store, backup_read_buffer + offset, data_to_read, leaf->offset() + offset);
+		if (len == -1) {
+			printf("ERROR flush failed to read from buffer %i, %s\n", leaf->get_id(), strerror(errno));
+			return;
+		}
+		data_to_read -= len;
+		offset += len;
+	}
+
+	// printf("adding key %i from buffer %i to circular queue\n", leaf->min_key, leaf->get_id());
+	cq->push(backup_read_buffer, leaf->size()); // add the data we read to the circular queue
+	
+	// reset the BufferControlBlock (we have emptied it of data)
+	leaf->reset();
+	return;
 }
 
 // ask the buffer tree for data
