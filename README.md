@@ -1,7 +1,7 @@
 # FastBufferTree
 A fast buffer tree implementation for graph streaming. 
 
-The following describes some of the basics of how this works. There are two key objects `BufferTree` and `BufferControlBlock`.
+The following describes some of the basics of how this works. There are three key objects `BufferTree`, `BufferControlBlock`, and `CircularQueue`.
 
 ## BufferTree
 This class specifies most of the meta-data and functions for handling a buffer tree. Specifically, the buffer tree maintains a list of nodes that compose the tree in addition to some other buffers used to enable efficient IO when either flushing or reading data from a node.
@@ -47,3 +47,20 @@ node3 node4 node5 node6
 ```
 
 Note that the root does not appear in the backing store. This is because it is stored entirely in RAM. There is also no BufferControlBlock for the root node for the same reason.
+
+## CircularQueue
+When a node leaf node is ready to be processed by the user its data is placed into the CricularQueue. The CircularQueue is an entirely in RAM structure designed to eliminate IO contention between inputs to the buffer tree and reads to the leaves for data. With the CircularQueue, request to the BufferTree for data take place entirely in RAM.
+
+A leaf is ''ready'' to be processed when it is full and, if it was any other node, would normally be flushed. Instead we place the data stored at this leaf into the queue and then delete the data from the leaf node. An analogy for this process is that the leaves are growing fruits (the update buffers) and when these fruits are big and ripe they will naturally fall from the tree.
+
+The CircularQueue is designed with a limited size. This is because RAM usage needs to be minimal and has the added benefit of naturally rate limiting the buffer tree to match the speed at which data can be taken out of it. Operations that need to take data from an empty queue or that need to insert to a full queue are blocked until their preconditions are met.
+
+The structure of the CircularQueue is as follows
+```
+-----------------------------------------------------------------------------------
+| node 4 updates | clean | clean | node 1 updates | node 2 updates| node 3 updates|
+-----------------------------------------------------------------------------------
+                   ^ Head                                ^ Tail
+```
+
+`Head` marks the where the next insertion to the CircularQueue should take place and `Tail` marks where the next read should happen from. Slots are marked `clean` if their data has been taken out of the queue and processed. The queue is full if the head ever points to a `dirty` slot and empty if `Head` and `Tail` point to the same slot (which is also clean).

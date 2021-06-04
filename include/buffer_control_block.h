@@ -83,7 +83,7 @@ public:
   /*
    * Write to the buffer managed by this metadata.
    * @param data the data to write
-   * @param size the size of the data written
+   * @param size the size in bytes of the data to write
    * @return true if buffer needs flush for the first time and false otherwise
    */
   bool write(char * data, uint32_t size);
