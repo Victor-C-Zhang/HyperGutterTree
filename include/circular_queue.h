@@ -7,7 +7,7 @@
 
 struct queue_elm {
 	bool dirty;    // is this queue element yet to be processed by sketching (if so do not overwrite)
-	uint32_t size; // the size of this data element
+	uint32_t size; // the size of this data element (in bytes)
 	char *data;    // a pointer to the data
 };
 
@@ -23,14 +23,25 @@ public:
 	CircularQueue(int num_elements, int size_of_elm);
 	~CircularQueue();
 
-	// add a data element to the queue
+	/* 
+	 * Add a data element to the queue
+	 * @param   elm the data to be placed into the queue
+	 * @param   size the number of bytes in elm
+	 */
 	void push(char *elm, int size);              
 	
-	// get data from the queue for processing
+	/* 
+	 * Get data from the queue for processing
+	 * @param   ret where the data from the circular queue should be placed
+	 * @return  true if we were able to get good data, false otherwise
+	 */
 	bool peek(std::pair<int, queue_elm> &ret);
 	
-	// mark the queue element i as ready to be overwritten.
-	// Call pop after processing the data from peek
+	/* 
+	 * Mark a queue element as ready to be overwritten.
+	 * Call pop after processing the data from peek.
+	 * @param   i is the position of the queue_elm which should be popped
+	 */
 	void pop(int i);
 
 	std::condition_variable cirq_full;
@@ -51,7 +62,11 @@ private:
 	
 	queue_elm *queue_array; // array queue_elm metadata
 	char *data_array;       // the actual data
+
+	// increment the head or tail pointer
 	inline int incr(int p) {return (p + 1) % len;}
+
+	// functions for checking if the queue is empty or full
 	inline bool full()     {return queue_array[head].dirty;} // if the next data item is dirty then full
 	inline bool empty()    {return (head == tail && !full());}
 };
