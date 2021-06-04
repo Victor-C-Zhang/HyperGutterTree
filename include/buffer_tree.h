@@ -56,6 +56,11 @@ private:
   // buffer which we use when reading in BufferControlBlocks
   char *read_buffer;
 
+  // buffer we use when we need to flush within a flush
+  // we only have one right now because this should only
+  // ever happen for leaves
+  char *backup_read_buffer;
+
   /*
    * root node and functions for handling it
    */
@@ -78,6 +83,14 @@ private:
    * @returns nothing
    */
   flush_ret_t do_flush(char *data, uint32_t size, uint32_t begin, Node min_key, Node max_key, uint8_t options, std::queue<BufferControlBlock *> &fq);
+
+  /*
+   * If when flushing a buffer it is discovered that a leaf
+   * needs to be flushed, do so with this function.
+   * @param leaf   The leaf buffer to be flushed
+   * @return       nothing
+   */
+  flush_ret_t flush_leaf(BufferControlBlock *leaf);
 
   // Circular queue in which we place leaves that fill up
   CircularQueue *cq;
@@ -175,6 +188,7 @@ public:
   static uint32_t max_buffer_size;
   static uint32_t buffer_size;
   static uint64_t backing_EOF;
+  static uint64_t leaf_size;
   /*
    * File descriptor of backing file for storage
    */
