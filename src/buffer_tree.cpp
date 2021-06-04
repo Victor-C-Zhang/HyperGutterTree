@@ -48,7 +48,7 @@ nodes, int workers, bool reset=false) : dir(dir), M(size), B(b), N(nodes) {
 	buffer_size     = M; // probably figure out a better solution than this
 	max_buffer_size = 2 * M;
 	backing_EOF     = 0;
-	leaf_size       = floor(24 * pow(log(N) / log(2), 3)); // size of leaf proportional to size of sketch
+	leaf_size       = floor(24 * pow(log2(N), 3)); // size of leaf proportional to size of sketch
 	leaf_size       = (leaf_size < page_size)? page_size : leaf_size; //enforce size of at least page_size
 
 	// malloc the memory for the root node
