@@ -1,6 +1,7 @@
 #include <gtest/gtest.h>
 #include <math.h>
 #include <thread>
+#include <atomic>
 #include "../include/buffer_tree.h"
 
 #define KB 1 << 10
@@ -8,12 +9,12 @@
 #define GB 1 << 30
 
 static bool shutdown = false;
+static std::atomic<uint32_t> upd_processed;
 
 // queries the buffer tree and verifies that the data
 // returned makes sense
 // Should be run in a seperate thread
 void querier(BufferTree *buf_tree, int nodes) {
-  printf("creating query thread for buffertree\n");
   data_ret_t data;
   while(true) {
     bool valid = buf_tree->get_data(data);
@@ -24,6 +25,7 @@ void querier(BufferTree *buf_tree, int nodes) {
       for (Node upd : updates) {
         // printf("edge to %d\n", upd.first);
         ASSERT_EQ(nodes - (key + 1), upd) << "key " << key;
+        upd_processed += 1;
       }
     }
     else if(shutdown)
@@ -42,6 +44,7 @@ void run_test(const int nodes, const int num_updates, const int buffer_size, con
 
   BufferTree *buf_tree = new BufferTree("./test_", buffer_size, branch_factor, nodes, 1, true);
   shutdown = false;
+  upd_processed = 0;
   std::thread qworker(querier, buf_tree, nodes);
 
   printf("inserting updates to buffer tree\n");
@@ -56,6 +59,7 @@ void run_test(const int nodes, const int num_updates, const int buffer_size, con
   buf_tree->set_non_block(true); // switch to non-blocking calls in an effort to exit
 
   qworker.join();
+  ASSERT_EQ(num_updates, upd_processed);
   delete buf_tree;
 }
 
@@ -89,4 +93,36 @@ TEST(BasicInsert, FillLowest) {
   const int branch = 2;
 
   run_test(nodes, num_updates, buf, branch);
+}
+
+TEST(Parallelism, ManyQueryThreads) {
+  const int nodes = 1024;
+  const int num_updates = 5206;
+  const int buf = MB;
+  const int branch = 8;
+
+  BufferTree *buf_tree = new BufferTree("./test_", buf, branch, nodes, 20, true);
+  shutdown = false;
+  upd_processed = 0;
+  std::thread query_threads[20];
+  for (int t = 0; t < 20; t++) {
+    query_threads[t] = std::thread(querier, buf_tree, nodes);
+  }
+  
+  printf("inserting updates to buffer tree\n");
+  for (int i = 0; i < num_updates; i++) {
+    update_t upd;
+    upd.first = i % nodes;
+    upd.second = (nodes - 1) - (i % nodes);
+    buf_tree->insert(upd);
+  }
+  buf_tree->force_flush();
+  shutdown = true;
+  buf_tree->set_non_block(true); // switch to non-blocking calls in an effort to exit
+
+  for (int t = 0; t < 20; t++) {
+    query_threads[t].join();
+  }
+  ASSERT_EQ(num_updates, upd_processed);
+  delete buf_tree;
 }

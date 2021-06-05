@@ -333,9 +333,8 @@ flush_ret_t inline BufferTree::flush_control_block(BufferControlBlock *bcb) {
 	}
 
 	if (bcb->is_leaf() && bcb->size() > 0) { // this is a leaf node
-		// printf("adding key %i from buffer %i to circular queue\n", bcb->min_key, bcb->get_id());
 		cq->push(read_buffer, bcb->size()); // add the data we read to the circular queue
-		
+
 		// reset the BufferControlBlock (we have emptied it of data)
 		bcb->reset();
 		return;
@@ -412,7 +411,7 @@ bool BufferTree::get_data(data_ret_t &data) {
 
 		if (upd.first != key) {
 			// error to handle some weird unlikely buffer tree shenanigans
-			printf("source node %lu and key %lu do not match\n", upd.first, key);
+			printf("source node %lu and key %lu do not match in get_data()\n", upd.first, key);
 			throw KeyIncorrectError();
 		}
 

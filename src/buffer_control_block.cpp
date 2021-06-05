@@ -48,9 +48,9 @@ bool BufferControlBlock::write(char *data, uint32_t size) {
 	}
 
 	uint32_t orig_size = size;
-	uint32_t len = pwrite(BufferTree::backing_store, data, size, file_offset + storage_ptr);
+	int len = pwrite(BufferTree::backing_store, data, size, file_offset + storage_ptr);
 	int w = 0;
-	while(len < size) {
+	while(len < (int32_t)size) {
 		if (len == -1) {
 			printf("ERROR: write to buffer %i failed %s\n", id, strerror(errno));
 			return false;
