@@ -101,7 +101,7 @@ TEST(Parallelism, ManyQueryThreads) {
   const int buf = MB;
   const int branch = 8;
 
-  BufferTree *buf_tree = new BufferTree("./test_", buf, branch, nodes, 20, true);
+  BufferTree *buf_tree = new BufferTree("./test_", buf, branch, nodes, 32, true);
   shutdown = false;
   upd_processed = 0;
   std::thread query_threads[16];
