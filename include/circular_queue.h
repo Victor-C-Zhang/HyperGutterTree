@@ -7,6 +7,7 @@
 
 struct queue_elm {
 	bool dirty;    // is this queue element yet to be processed by sketching (if so do not overwrite)
+	bool touched;  // have we peeked at this item (if so do not peek it again)
 	uint32_t size; // the size of this data element (in bytes)
 	char *data;    // a pointer to the data
 };
@@ -74,7 +75,8 @@ private:
 
 	// functions for checking if the queue is empty or full
 	inline bool full()     {return queue_array[head].dirty;} // if the next data item is dirty then full
-	inline bool empty()    {return !queue_array[tail].dirty;} // if place to read from is clean then empty
+	// if place to read from is clean and has not been peeked already then queue is empty
+	inline bool empty()    {return !queue_array[tail].dirty && !queue_array[tail].touched;}
 };
 
 class WriteTooBig : public std::exception {
