@@ -96,16 +96,16 @@ TEST(BasicInsert, FillLowest) {
 }
 
 TEST(Parallelism, ManyQueryThreads) {
-  const int nodes = 3000;
-  const int num_updates = MB << 3;
+  const int nodes = 1024;
+  const int num_updates = 5206;
   const int buf = MB;
   const int branch = 8;
 
-  BufferTree *buf_tree = new BufferTree("./test_", buf, branch, nodes, 16, true);
+  BufferTree *buf_tree = new BufferTree("./test_", buf, branch, nodes, 20, true);
   shutdown = false;
   upd_processed = 0;
-  std::thread query_threads[16];
-  for (int t = 0; t < 16; t++) {
+  std::thread query_threads[20];
+  for (int t = 0; t < 20; t++) {
     query_threads[t] = std::thread(querier, buf_tree, nodes);
   }
   
@@ -120,7 +120,7 @@ TEST(Parallelism, ManyQueryThreads) {
   shutdown = true;
   buf_tree->set_non_block(true); // switch to non-blocking calls in an effort to exit
 
-  for (int t = 0; t < 16; t++) {
+  for (int t = 0; t < 20; t++) {
     query_threads[t].join();
   }
   ASSERT_EQ(num_updates, upd_processed);

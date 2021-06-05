@@ -412,7 +412,7 @@ bool BufferTree::get_data(data_ret_t &data) {
 
 		if (upd.first != key) {
 			// error to handle some weird unlikely buffer tree shenanigans
-			printf("source node %lu and key %lu do not match\n", upd.first, key);
+			printf("source node %lu and key %lu do not match in get_data()\n", upd.first, key);
 			throw KeyIncorrectError();
 		}
 

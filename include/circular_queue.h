@@ -53,6 +53,12 @@ public:
 	// should CircularQueue peeks wait until they can succeed(false)
 	// or return false on failure (true)
 	bool no_block;
+
+	/*
+	 * Function which prints the circular queue
+	 * Used for debugging
+	 */
+	void print();
 private:
 	int len;      // maximum number of data elements to be stored in the queue
 	int elm_size; // size of an individual element in bytes
@@ -69,5 +75,12 @@ private:
 	// functions for checking if the queue is empty or full
 	inline bool full()     {return queue_array[head].dirty;} // if the next data item is dirty then full
 	inline bool empty()    {return (head == tail && !full());}
+};
+
+class WriteTooBig : public std::exception {
+public:
+  virtual const char * what() const throw() {
+    return "Write to circular queue is too big";
+  }
 };
 #endif
