@@ -333,18 +333,6 @@ flush_ret_t inline BufferTree::flush_control_block(BufferControlBlock *bcb) {
 	}
 
 	if (bcb->is_leaf() && bcb->size() > 0) { // this is a leaf node
-		// REMOVE THIS. It's for error checking
-		uint32_t idx = 0;
-		while(idx < bcb->size()) {
-			update_t upd = deserialize_update(read_buffer + idx);
-			if (upd.first != bcb->min_key) {
-				printf("flush_control_block: Got incorrect key %lu when writing from leaf (key=%lu) to circular queue\n", upd.first, bcb->min_key);
-				throw KeyIncorrectError();
-			}
-			idx += serial_update_size;
-		}
-
-		// printf("adding key %i from buffer %i to circular queue\n", bcb->min_key, bcb->get_id());
 		cq->push(read_buffer, bcb->size()); // add the data we read to the circular queue
 
 		// reset the BufferControlBlock (we have emptied it of data)
@@ -376,17 +364,6 @@ flush_ret_t inline BufferTree::flush_leaf(BufferControlBlock *leaf) {
 		}
 		data_to_read -= len;
 		offset += len;
-	}
-
-	// REMOVE THIS. It's for error checking
-	uint32_t idx = 0;
-	while(idx < leaf->size()) {
-		update_t upd = deserialize_update(backup_read_buffer + idx);
-		if (upd.first != leaf->min_key) {
-			printf("fluch_leaf: Got incorrect key %lu when writing from leaf (key=%lu) to circular queue\n", upd.first, leaf->min_key);
-			throw KeyIncorrectError();
-		}
-		idx += serial_update_size;
 	}
 
 	// printf("adding key %i from buffer %i to circular queue\n", leaf->min_key, leaf->get_id());

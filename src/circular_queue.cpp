@@ -82,5 +82,6 @@ void CircularQueue::pop(int i) {
 }
 
 void CircularQueue::print() {
-	printf("head=%i, tail=%i, is_full=%i, is_empty=%i\n", head, tail, full(), empty());
+	printf("head=%i, tail=%i, is_full=%s, is_empty=%s\n", 
+		head, tail, full()? "true" : "false", empty()? "true" : "false");
 }
