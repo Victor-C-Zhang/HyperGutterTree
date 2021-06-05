@@ -3,7 +3,6 @@
 #include "../include/buffer_tree.h"
 
 #include <string.h>
-#include <thread>
 #include <chrono>
 
 CircularQueue::CircularQueue(int num_elements, int size_of_elm): 
