@@ -367,6 +367,17 @@ flush_ret_t inline BufferTree::flush_leaf(BufferControlBlock *leaf) {
 		offset += len;
 	}
 
+	// REMOVE THIS. It's for error checking
+	uint32_t idx = 0;
+	while(idx < leaf->size()) {
+		update_t upd = deserialize_update(backup_read_buffer + idx);
+		if (upd.first != leaf->min_key) {
+			printf("Got incorrect key %lu when writing from leaf (key=%lu) to circular queue\n", upd.first, leaf->min_key);
+			throw KeyIncorrectError();
+		}
+		idx += serial_update_size;
+	}
+
 	// printf("adding key %i from buffer %i to circular queue\n", leaf->min_key, leaf->get_id());
 	cq->push(backup_read_buffer, leaf->size()); // add the data we read to the circular queue
 	
