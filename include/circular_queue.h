@@ -76,7 +76,7 @@ private:
 	// functions for checking if the queue is empty or full
 	inline bool full()     {return queue_array[head].dirty;} // if the next data item is dirty then full
 	// if place to read from is clean and has not been peeked already then queue is empty
-	inline bool empty()    {return !queue_array[tail].dirty && !queue_array[tail].touched;}
+	inline bool empty()    {return !queue_array[tail].dirty || queue_array[tail].touched;}
 };
 
 class WriteTooBig : public std::exception {
