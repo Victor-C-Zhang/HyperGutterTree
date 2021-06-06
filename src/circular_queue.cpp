@@ -36,8 +36,8 @@ void CircularQueue::push(char *elm, int size) {
 		throw WriteTooBig();
 	}
 
-	std::unique_lock<std::mutex> lk(write_lock);
 	while(true) {
+		std::unique_lock<std::mutex> lk(write_lock);
 		// printf("CQ: push: wait on not-full. full() = %s\n", (full())? "true" : "false");
 		cirq_full.wait(lk, [this]{return !full();});
 		if(!full()) {
