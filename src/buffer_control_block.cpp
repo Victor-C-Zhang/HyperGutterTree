@@ -39,11 +39,11 @@ inline bool BufferControlBlock::needs_flush(uint32_t size_written) {
 bool BufferControlBlock::write(char *data, uint32_t size) {
 	// printf("Writing to buffer %d data pointer = %p with size %i\n", id, data, size);
 	if (is_leaf() && storage_ptr + size > 2 * BufferTree::leaf_size) {
-		printf("buffer %i too full [leaf]\n", id);
+		printf("buffer %i too full [leaf] write size %u\n", id, size);
 		throw BufferFullError(id);
 	}
 	else if(storage_ptr + size > BufferTree::max_buffer_size) {
-		printf("buffer %i too full [internal node]\n", id);
+		printf("buffer %i too full [internal node] write size %u\n", id, size);
 		throw BufferFullError(id);
 	}
 
