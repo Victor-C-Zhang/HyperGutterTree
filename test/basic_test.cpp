@@ -47,7 +47,6 @@ void run_test(const int nodes, const int num_updates, const int buffer_size, con
   upd_processed = 0;
   std::thread qworker(querier, buf_tree, nodes);
 
-  printf("inserting updates to buffer tree\n");
   for (int i = 0; i < num_updates; i++) {
     update_t upd;
     upd.first = i % nodes;
@@ -95,11 +94,54 @@ TEST(BasicInsert, FillLowest) {
   run_test(nodes, num_updates, buf, branch);
 }
 
+// test designed to trigger recursive flushes
+// We will do this by inserting to all nodes until the 
+// root buffer has become full 15 times. This will result
+// in every internal node (but not the root) being half full
+//
+// Then we will insert a full buffer of updates for each node
+// causing a large number of cascading flushes
+TEST(BasicInsert, EvilInsertions) {
+  int full_root = MB/BufferTree::serial_update_size;
+  const int nodes = 32;
+  const int round_1_size = 15 * full_root; // enough updates to fill it up half way
+  const int num_updates = 32 * full_root + round_1_size;
+  const int buf = MB;
+  const int branch = 2;
+
+  BufferTree *buf_tree = new BufferTree("./test_", buf, branch, nodes, 1, true);
+  shutdown = false;
+  upd_processed = 0;
+  std::thread qworker(querier, buf_tree, nodes);
+
+  for (int i = 0; i < round_1_size; i++) {
+    update_t upd;
+    upd.first = i % nodes;
+    upd.second = (nodes - 1) - (i % nodes);
+    buf_tree->insert(upd);
+  }
+  for(int i = 0; i < nodes; i++) {
+    for (int n = 0; n < full_root; n++) {
+      update_t upd;
+      upd.first = i % nodes;
+      upd.second = (nodes - 1) - (i % nodes);
+      buf_tree->insert(upd);
+    }
+  }
+  buf_tree->force_flush();
+  shutdown = true;
+  buf_tree->set_non_block(true); // switch to non-blocking calls in an effort to exit
+
+  qworker.join();
+  ASSERT_EQ(num_updates, upd_processed);
+  delete buf_tree;
+}
+
 TEST(Parallelism, ManyQueryThreads) {
   const int nodes = 1024;
   const int num_updates = 5206;
   const int buf = MB;
-  const int branch = 8;
+  const int branch = 2;
 
   // here we limit the number of slots in the circular queue to 
   // create contention between the threads. (we pass 5 instead of 20)
@@ -111,7 +153,6 @@ TEST(Parallelism, ManyQueryThreads) {
     query_threads[t] = std::thread(querier, buf_tree, nodes);
   }
   
-  printf("inserting updates to buffer tree\n");
   for (int i = 0; i < num_updates; i++) {
     update_t upd;
     upd.first = i % nodes;
