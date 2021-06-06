@@ -316,14 +316,9 @@ flush_ret_t inline BufferTree::flush_root() {
 }
 
 flush_ret_t inline BufferTree::flush_control_block(BufferControlBlock *bcb) {
-	printf("flushing "); bcb->print();
-
-	if(bcb->children_num > 0) {
-		printf("Children sizes: ");
-		for (int i = 0; i < bcb->children_num; i++) {
-			printf("%i:%lu\t", bcb->first_child + i, buffers[bcb->first_child + i]->size());
-		}
-		printf("\n");
+	// printf("flushing "); bcb->print();
+	if(bcb->size() == 0) {
+		return; // don't flush empty control blocks
 	}
 
 	// flushing a control block is the only time read_buffers are used
@@ -343,7 +338,7 @@ flush_ret_t inline BufferTree::flush_control_block(BufferControlBlock *bcb) {
 		offset += len;
 	}
 
-	if (bcb->is_leaf() && bcb->size() > 0) { // this is a leaf node
+	if (bcb->is_leaf()) { // this is a leaf node
 		cq->push(read_buffers[level-1], bcb->size()); // add the data we read to the circular queue
 
 		// reset the BufferControlBlock (we have emptied it of data)
