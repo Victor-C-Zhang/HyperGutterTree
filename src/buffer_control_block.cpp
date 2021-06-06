@@ -59,7 +59,6 @@ bool BufferControlBlock::write(char *data, uint32_t size) {
 		size -= len;
 		len = pwrite(BufferTree::backing_store, data + w, size, file_offset + storage_ptr + w);
 	}
-
 	storage_ptr += size;
 
 	// return if this buffer should be added to the flush queue
