@@ -101,7 +101,9 @@ TEST(Parallelism, ManyQueryThreads) {
   const int buf = MB;
   const int branch = 8;
 
-  BufferTree *buf_tree = new BufferTree("./test_", buf, branch, nodes, 20, true);
+  // here we limit the number of slots in the circular queue to 
+  // create contention between the threads. (we pass 5 instead of 20)
+  BufferTree *buf_tree = new BufferTree("./test_", buf, branch, nodes, 5, true);
   shutdown = false;
   upd_processed = 0;
   std::thread query_threads[20];
