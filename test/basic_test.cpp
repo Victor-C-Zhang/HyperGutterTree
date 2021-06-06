@@ -4,9 +4,9 @@
 #include <atomic>
 #include "../include/buffer_tree.h"
 
-#define KB 1 << 10
-#define MB 1 << 20
-#define GB 1 << 30
+#define KB (1 << 10)
+#define MB (1 << 20)
+#define GB (1 << 30)
 
 static bool shutdown = false;
 static std::atomic<uint32_t> upd_processed;
