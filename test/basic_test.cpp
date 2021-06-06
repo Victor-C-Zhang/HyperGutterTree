@@ -95,17 +95,16 @@ TEST(BasicInsert, FillLowest) {
 }
 
 // test designed to trigger recursive flushes
-// We will do this by inserting to all nodes until the 
-// root buffer has become full 15 times. This will result
-// in every internal node (but not the root) being half full
+// Insert full root buffers which are 95% node 0 and 5% a node
+// which will make 95% split from 5% at different levels of 
+// the tree. We do this process from bottom to top. When this
+// is done. We insert a full buffer of 0 updates.
 //
-// Then we will insert a full buffer of updates for each node
-// causing a large number of cascading flushes
+// For exampele 0 and 2, then 0 and 4, etc. 
 TEST(BasicInsert, EvilInsertions) {
   int full_root = MB/BufferTree::serial_update_size;
   const int nodes = 32;
-  const int round_1_size = 15 * full_root; // enough updates to fill it up half way
-  const int num_updates = 32 * full_root + round_1_size;
+  const int num_updates = 4 * full_root;
   const int buf = MB;
   const int branch = 2;
 
@@ -114,19 +113,25 @@ TEST(BasicInsert, EvilInsertions) {
   upd_processed = 0;
   std::thread qworker(querier, buf_tree, nodes);
 
-  for (int i = 0; i < round_1_size; i++) {
-    update_t upd;
-    upd.first = i % nodes;
-    upd.second = (nodes - 1) - (i % nodes);
-    buf_tree->insert(upd);
-  }
-  for(int i = 0; i < nodes; i++) {
-    for (int n = 0; n < full_root; n++) {
+  for (int l = 1; l <= 3; l++) {
+    for (int i = 0; i < full_root; i++) {
       update_t upd;
-      upd.first = i % nodes;
-      upd.second = (nodes - 1) - (i % nodes);
+      if (i < .95 * full_root) {
+        upd.first  = 0;
+        upd.second = (nodes - 1) - (0 % nodes);
+      } else {
+        upd.first  = 1 << l;
+        upd.second = (nodes - 1) - (upd.first % nodes);
+      }
       buf_tree->insert(upd);
     }
+  }
+  
+  for (int n = 0; n < full_root; n++) {
+    update_t upd;
+    upd.first = 0;
+    upd.second = (nodes - 1) - (0 % nodes);
+    buf_tree->insert(upd);
   }
   buf_tree->force_flush();
   shutdown = true;
@@ -136,6 +141,7 @@ TEST(BasicInsert, EvilInsertions) {
   ASSERT_EQ(num_updates, upd_processed);
   delete buf_tree;
 }
+
 
 TEST(Parallelism, ManyQueryThreads) {
   const int nodes = 1024;
