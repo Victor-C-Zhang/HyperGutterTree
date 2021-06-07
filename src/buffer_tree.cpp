@@ -74,7 +74,7 @@ nodes, int workers, bool reset=false) : dir(dir), M(size), B(b), N(nodes) {
 
 	// create the circular queue in which we will place ripe fruit (full leaves)
 	// make space for full 2 * workers full updates
-	cq = new CircularQueue(2*workers, 2*leaf_size);
+	cq = new CircularQueue(2*workers, leaf_size + page_size);
 	
 	// will want to use mmap instead? - how much is in RAM after allocation (none?)
 	// can't use mmap instead might use it as well. (Still need to create the file to be a given size)
