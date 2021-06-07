@@ -2,19 +2,20 @@
 #include <math.h>
 #include <thread>
 #include <chrono>
+#include <atomic>
 #include "../include/buffer_tree.h"
 
-#define KB (1 << 10)
-#define MB (1 << 20)
-#define GB (1 << 30)
+#define KB (uint64_t (1 << 10))
+#define MB (uint64_t (1 << 20))
+#define GB (uint64_t (1 << 30))
 
 static bool shutdown = false;
+static std::atomic<uint32_t> upd_processed;
 
 // queries the buffer tree and verifies that the data
 // returned makes sense
 // Should be run in a seperate thread
 void querier(BufferTree *buf_tree, int nodes) {
-  printf("creating query thread for buffertree\n");
   data_ret_t data;
   while(true) {
     bool valid = buf_tree->get_data(data);
@@ -25,11 +26,25 @@ void querier(BufferTree *buf_tree, int nodes) {
       for (Node upd : updates) {
         // printf("edge to %d\n", upd.first);
         ASSERT_EQ(nodes - (key + 1), upd) << "key " << key;
+        upd_processed += 1;
       }
     }
     else if(shutdown)
       return;
   }
+}
+
+void progress(const uint64_t num_updates) {
+    while(true) {
+        sleep(5);
+        uint64_t cur = upd_processed.load();
+        printf("number of insertions processed: %lu %f%% \r", cur, cur/((double)num_updates/100));
+        fflush(stdout);
+        if (upd_processed == num_updates) {
+            printf("number of insertions processed: DONE         \n");
+            break;
+        }
+    }
 }
 
 // helper function to run a basic test of the buffer tree with
@@ -44,11 +59,13 @@ void run_test(const int nodes, const uint64_t num_updates, const uint64_t buffer
 
     BufferTree *buf_tree = new BufferTree("./test_", buffer_size, branch_factor, nodes, threads, true);
     shutdown = false;
+    upd_processed = 0;
 
     std::thread query_threads[threads];
     for (int t = 0; t < threads; t++) {
         query_threads[t] = std::thread(querier, buf_tree, nodes);
     }
+    std::thread progress_thr(progress, num_updates);
 
     auto start = std::chrono::steady_clock::now();
     for (uint64_t i = 0; i < num_updates; i++) {
@@ -69,6 +86,7 @@ void run_test(const int nodes, const uint64_t num_updates, const uint64_t buffer
     for (int t = 0; t < threads; t++) {
         query_threads[t].join();
     }
+    progress_thr.join();
     delete buf_tree;
 }
 
