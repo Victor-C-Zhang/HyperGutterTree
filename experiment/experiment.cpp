@@ -4,9 +4,9 @@
 #include <chrono>
 #include "../include/buffer_tree.h"
 
-#define KB 1 << 10
-#define MB 1 << 20
-#define GB 1 << 30
+#define KB (1 << 10)
+#define MB (1 << 20)
+#define GB (1 << 30)
 
 static bool shutdown = false;
 
@@ -37,57 +37,74 @@ void querier(BufferTree *buf_tree, int nodes) {
 // this test only works if the depth of the tree does not exceed 1
 // and no work is claimed off of the work queue
 // to work correctly num_updates must be a multiple of nodes
-void run_test(const int nodes, const int num_updates, const int buffer_size, const int branch_factor) {
-  printf("Running Test: nodes=%i num_updates=%i buffer_size %i branch_factor %i\n",
+void run_test(const int nodes, const uint64_t num_updates, const uint64_t buffer_size, 
+ const int branch_factor, const int threads=1) {
+    printf("Running Test: nodes=%i num_updates=%lu buffer_size %lu branch_factor %i\n",
          nodes, num_updates, buffer_size, branch_factor);
 
-  BufferTree *buf_tree = new BufferTree("./test_", buffer_size, branch_factor, nodes, 1, true);
-  shutdown = false;
-  std::thread qworker(querier, buf_tree, nodes);
+    BufferTree *buf_tree = new BufferTree("./test_", buffer_size, branch_factor, nodes, threads, true);
+    shutdown = false;
 
-  auto start = std::chrono::steady_clock::now();
-  for (int i = 0; i < num_updates; i++) {
-    update_t upd;
-    upd.first = i % nodes;
-    upd.second = (nodes - 1) - (i % nodes);
-    buf_tree->insert(upd);
-  }
-  std::chrono::duration<double> delta = std::chrono::steady_clock::now() - start;
-  printf("insertions took %f seconds: average rate = %f\n", delta.count(), num_updates/delta.count());
-  buf_tree->force_flush();
-  shutdown = true;
-  buf_tree->set_non_block(true); // tell any waiting threads to reset
+    std::thread query_threads[threads];
+    for (int t = 0; t < threads; t++) {
+        query_threads[t] = std::thread(querier, buf_tree, nodes);
+    }
 
-  delta = std::chrono::steady_clock::now() - start;
-  printf("insert+force_flush took %f seconds: average rate = %f\n", delta.count(), num_updates/delta.count());
+    auto start = std::chrono::steady_clock::now();
+    for (uint64_t i = 0; i < num_updates; i++) {
+        update_t upd;
+        upd.first = i % nodes;
+        upd.second = (nodes - 1) - (i % nodes);
+        buf_tree->insert(upd);
+    }
+    std::chrono::duration<double> delta = std::chrono::steady_clock::now() - start;
+    printf("insertions took %f seconds: average rate = %f\n", delta.count(), num_updates/delta.count());
+    buf_tree->force_flush();
+    shutdown = true;
+    buf_tree->set_non_block(true); // tell any waiting threads to reset
 
-  qworker.join();
-  delete buf_tree;
+    delta = std::chrono::steady_clock::now() - start;
+    printf("insert+force_flush took %f seconds: average rate = %f\n", delta.count(), num_updates/delta.count());
+
+    for (int t = 0; t < threads; t++) {
+        query_threads[t].join();
+    }
+    delete buf_tree;
 }
 
-TEST(Experiment, LargeNarrow) {
-  const int nodes = 512;
-  const int num_updates = MB << 5;
-  const int buf = MB;
-  const int branch = 4;
+TEST(Experiment, LargeStandard) {
+    const int nodes            = 512;
+    const uint64_t num_updates = MB << 5;
+    const uint64_t buf         = MB;
+    const int branch           = 8;
 
-  run_test(nodes, num_updates, buf, branch);
+    run_test(nodes, num_updates, buf, branch);
 }
 
 TEST(Experiment, LargeWide) {
-  const int nodes = 512;
-  const int num_updates = MB << 5;
-  const int buf = MB;
-  const int branch = 16;
+    const int nodes            = 512;
+    const uint64_t num_updates = MB << 5;
+    const uint64_t buf         = MB;
+    const int branch           = 16;
 
-  run_test(nodes, num_updates, buf, branch);
+    run_test(nodes, num_updates, buf, branch);
 }
 
 TEST(Experiment, ExtraLarge) {
-  const int nodes = 1024;
-  const int num_updates = MB << 8;
-  const int buf = MB << 1;
-  const int branch = 16;
+    const int nodes            = 1024;
+    const uint64_t num_updates = MB << 8;
+    const uint64_t buf         = MB << 1;
+    const int branch           = 16;
 
-  run_test(nodes, num_updates, buf, branch);
+    run_test(nodes, num_updates, buf, branch);
+}
+
+TEST(SteadyState, HugeExperiment) {
+    const int nodes            = 500000;
+    const uint64_t num_updates = GB << 5; // 34 billion
+    const uint64_t buf         = MB;
+    const int branch           = 16;
+    const int threads          = 40;
+
+    run_test(nodes, num_updates, buf, branch, threads);
 }
