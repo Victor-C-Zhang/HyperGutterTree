@@ -32,8 +32,7 @@ private:
   // root directory of tree
   std::string dir;
 
-  // minimum size of buffer. true buffer size is guaranteed to be between M
-  // and 2M
+  // size of a buffer (leaf buffers will likely be smaller)
   uint32_t M;
 
   // branching factor
@@ -47,19 +46,13 @@ private:
   std::vector<BufferControlBlock*> buffers;
 
   // buffers which we will use when performing flushes
-  char **flush_buffers;
-
-  // check root first then level 1 queue and finally a queue of anything else
-  std::queue<BufferControlBlock*> flush_queue1;     // level 1
-  std::queue<BufferControlBlock*> flush_queue_wild; // level > 1
-
-  // buffer which we use when reading in BufferControlBlocks
-  char *read_buffer;
-
-  // buffer we use when we need to flush within a flush
-  // we only have one right now because this should only
-  // ever happen for leaves
-  char *backup_read_buffer;
+  // we maintain these for every level of the tree 
+  // to handle recursive flushing.
+  // TODO: a read_buffer per level is somewhat expensive
+  // we could just read back from disk instead (more IOs though)
+  char ***flush_buffers;
+  char ***flush_positions; // pointers into the flush_buffers
+  char **read_buffers;
 
   /*
    * root node and functions for handling it
@@ -79,18 +72,11 @@ private:
    * @param min_key     the smalleset key this node is responsible for
    * @param max_key     the largest key this node is responsible for
    * @param options     the number of children this node has
-   * @param fq          the flush queue to place this node's children in if they need to be flushed
+   * @param level       the level of the buffer being flushed (0 is root)
    * @returns nothing
    */
-  flush_ret_t do_flush(char *data, uint32_t size, uint32_t begin, Node min_key, Node max_key, uint8_t options, std::queue<BufferControlBlock *> &fq);
-
-  /*
-   * If when flushing a buffer it is discovered that a leaf
-   * needs to be flushed, do so with this function.
-   * @param leaf   The leaf buffer to be flushed
-   * @return       nothing
-   */
-  flush_ret_t flush_leaf(BufferControlBlock *leaf);
+  flush_ret_t do_flush(char *data, uint32_t size, uint32_t begin, 
+    Node min_key, Node max_key, uint8_t options, uint8_t level);
 
   // Circular queue in which we place leaves that fill up
   CircularQueue *cq;
@@ -185,7 +171,6 @@ public:
   static uint page_size;
   static const uint serial_update_size = sizeof(Node) + sizeof(Node);
   static uint8_t max_level;
-  static uint32_t max_buffer_size;
   static uint32_t buffer_size;
   static uint64_t backing_EOF;
   static uint64_t leaf_size;

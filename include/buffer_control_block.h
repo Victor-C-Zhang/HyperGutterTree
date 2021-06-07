@@ -36,9 +36,9 @@ private:
 
   /*
    * Check if this buffer needs a flush
-   * @return true if buffer needs a flush and it didn't need it before the most recent write
+   * @return true if buffer needs a flush
    */
-  bool needs_flush(uint32_t size);
+  bool needs_flush();
 
 public:
   // this node's level in the tree. 0 is root, 1 is it's children, etc
@@ -84,9 +84,9 @@ public:
    * Write to the buffer managed by this metadata.
    * @param data the data to write
    * @param size the size in bytes of the data to write
-   * @return true if buffer needs flush for the first time and false otherwise
+   * @return true if buffer needs flush and false otherwise
    */
-  bool write(char * data, uint32_t size);
+  bool write(char *data, uint32_t size);
 
   /*
    * Flush the buffer this block controls
