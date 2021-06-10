@@ -10,7 +10,7 @@
 #define GB (uint64_t (1 << 30))
 
 static bool shutdown = false;
-static std::atomic<uint32_t> upd_processed;
+static std::atomic<uint64_t> upd_processed;
 
 // queries the buffer tree and verifies that the data
 // returned makes sense
@@ -39,6 +39,7 @@ void progress(const uint64_t num_updates) {
         sleep(5);
         uint64_t cur = upd_processed.load();
         printf("number of insertions processed: %lu %f%% \r", cur, cur/((double)num_updates/100));
+
         fflush(stdout);
         if (upd_processed == num_updates) {
             printf("number of insertions processed: DONE         \n");
@@ -118,10 +119,10 @@ TEST(Experiment, ExtraLarge) {
 }
 
 TEST(SteadyState, HugeExperiment) {
-    const int nodes            = 500000;
-    const uint64_t num_updates = GB << 5; // 34 billion
+    const int nodes            = 250000;
+    const uint64_t num_updates = GB << 4; // 17 billion
     const uint64_t buf         = MB;
-    const int branch           = 16;
+    const int branch           = 256;
     const int threads          = 40;
 
     run_test(nodes, num_updates, buf, branch, threads);

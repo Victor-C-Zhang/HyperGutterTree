@@ -46,7 +46,7 @@ public:
 
   // the index in the buffers array of this buffer's smallest child
   buffer_id_t first_child = 0;
-  uint8_t children_num = 0;     // and the number of children
+  uint16_t children_num = 0;     // and the number of children
 
   // information about what keys this node will store
   Node min_key;
