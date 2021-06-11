@@ -73,11 +73,11 @@ bool CircularQueue::peek(std::pair<int, queue_elm> &ret) {
 }
 
 void CircularQueue::pop(int i) {
-	read_lock.lock();
+	write_lock.lock();
 	queue_array[i].dirty   = false; // this data has been processed and this slot may now be overwritten
 	queue_array[i].touched = false; // may read this slot
+	write_lock.unlock();
 	cirq_full.notify_one();
-	read_lock.unlock();
 }
 
 void CircularQueue::print() {
