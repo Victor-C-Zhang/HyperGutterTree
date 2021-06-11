@@ -14,19 +14,6 @@ BufferControlBlock::BufferControlBlock(buffer_id_t id, File_Pointer off, uint8_t
   storage_ptr = 0;
 }
 
-void BufferControlBlock::lock() {
-// TODO
-}
-
-void BufferControlBlock::unlock() {
-// TODO
-}
-
-bool BufferControlBlock::busy() {
-  // TODO
-	return true;
-}
-
 inline bool BufferControlBlock::needs_flush() {
 	if(is_leaf())
 		return storage_ptr >= BufferTree::leaf_size;

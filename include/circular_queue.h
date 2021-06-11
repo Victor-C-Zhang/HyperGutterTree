@@ -53,7 +53,7 @@ public:
 
 	// should CircularQueue peeks wait until they can succeed(false)
 	// or return false on failure (true)
-	bool no_block;
+	volatile bool no_block;
 
 	/*
 	 * Function which prints the circular queue
