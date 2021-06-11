@@ -6,10 +6,10 @@
 #include <utility>
 
 struct queue_elm {
-	bool dirty;    // is this queue element yet to be processed by sketching (if so do not overwrite)
-	bool touched;  // have we peeked at this item (if so do not peek it again)
-	uint32_t size; // the size of this data element (in bytes)
-	char *data;    // a pointer to the data
+	volatile bool dirty;    // is this queue element yet to be processed by sketching (if so do not overwrite)
+	volatile bool touched;  // have we peeked at this item (if so do not peek it again)
+	volatile uint32_t size; // the size of this data element (in bytes)
+	char *data;             // a pointer to the data
 };
 
 /*
