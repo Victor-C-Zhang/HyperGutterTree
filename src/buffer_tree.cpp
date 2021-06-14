@@ -369,8 +369,10 @@ bool BufferTree::get_data(data_ret_t &data) {
 	char *serial_data = elm.data;
 	uint32_t len      = elm.size;
 
-	if (len == 0)
+	if (len == 0) {
+		cq->pop(i);
 		return false; // we got no data so return not valid
+        }
 
 	data.second.clear(); // remove any old data from the vector
 	uint32_t vec_len  = len / serial_update_size;
@@ -419,6 +421,7 @@ void BufferTree::set_non_block(bool block) {
 	if (block) {
 		cq->no_block = true; // circular queue operations should no longer block
 		cq->cirq_empty.notify_all();
+		cq->cirq_full.notify_all();
 	}
 	else {
 		cq->no_block = false; // set circular queue to block if necessary

@@ -39,7 +39,7 @@ void CircularQueue::push(char *elm, int size) {
 	while(true) {
 		std::unique_lock<std::mutex> lk(write_lock);
 		// printf("CQ: push: wait on not-full. full() = %s\n", (full())? "true" : "false");
-		cirq_full.wait(lk, [this]{return !full();});
+		cirq_full.wait_for(lk, std::chrono::seconds(2), [this]{return !full();});
 		if(!full()) {
 			memcpy(queue_array[head].data, elm, size);
 			queue_array[head].dirty = true;
@@ -56,7 +56,7 @@ void CircularQueue::push(char *elm, int size) {
 bool CircularQueue::peek(std::pair<int, queue_elm> &ret) {
 	do {
 		std::unique_lock<std::mutex> lk(read_lock);
-		cirq_empty.wait(lk, [this]{return (!empty() || no_block);});
+		cirq_empty.wait_for(lk, std::chrono::seconds(2), [this]{return (!empty() || no_block);});
 		if(!empty()) {
 			int temp = tail;
 			queue_array[tail].touched = true;
@@ -73,11 +73,11 @@ bool CircularQueue::peek(std::pair<int, queue_elm> &ret) {
 }
 
 void CircularQueue::pop(int i) {
-	read_lock.lock();
+	write_lock.lock();
 	queue_array[i].dirty   = false; // this data has been processed and this slot may now be overwritten
 	queue_array[i].touched = false; // may read this slot
+	write_lock.unlock();
 	cirq_full.notify_one();
-	read_lock.unlock();
 }
 
 void CircularQueue::print() {

@@ -53,10 +53,10 @@ void run_test(const int nodes, const int num_updates, const int buffer_size, con
     upd.second = (nodes - 1) - (i % nodes);
     buf_tree->insert(upd);
   }
+  printf("force flush\n");
   buf_tree->force_flush();
   shutdown = true;
   buf_tree->set_non_block(true); // switch to non-blocking calls in an effort to exit
-
   qworker.join();
   ASSERT_EQ(num_updates, upd_processed);
   delete buf_tree;
