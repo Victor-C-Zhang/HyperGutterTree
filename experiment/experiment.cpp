@@ -120,10 +120,20 @@ TEST(Experiment, ExtraLarge) {
 
 TEST(SteadyState, HugeExperiment) {
     const int nodes            = 250000;
-    const uint64_t num_updates = GB << 4; // 17 billion
+    const uint64_t num_updates = GB << 2; // 8 billion
     const uint64_t buf         = MB;
-    const int branch           = 256;
-    const int threads          = 40;
+    const int branch           = 64;
+    const int threads          = 10;
+
+    run_test(nodes, num_updates, buf, branch, threads);
+}
+
+TEST(SteadyState, BigFanoutExperiment) {
+    const int nodes            = 250000;
+    const uint64_t num_updates = GB << 2; // 8 billion
+    const uint64_t buf         = MB;
+    const int branch           = 512;
+    const int threads          = 10;
 
     run_test(nodes, num_updates, buf, branch, threads);
 }

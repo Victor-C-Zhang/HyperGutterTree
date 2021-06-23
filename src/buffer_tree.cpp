@@ -25,7 +25,7 @@ int      BufferTree::backing_store;
  */
 BufferTree::BufferTree(std::string dir, uint32_t size, uint32_t b, Node
 nodes, int workers, bool reset=false) : dir(dir), M(size), B(b), N(nodes) {
-	page_size = sysconf(_SC_PAGE_SIZE); // works on POSIX systems (alternative is boost)
+	page_size = 4 * sysconf(_SC_PAGE_SIZE); // works on POSIX systems (alternative is boost)
 	int file_flags = O_RDWR | O_CREAT; // direct memory O_DIRECT may or may not be good
 	if (reset) {
 		file_flags |= O_TRUNC;
