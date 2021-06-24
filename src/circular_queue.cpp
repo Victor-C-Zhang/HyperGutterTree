@@ -36,11 +36,18 @@ void CircularQueue::push(char *elm, int size) {
 		throw WriteTooBig();
 	}
 
+	inserts++;
+	if (empty())
+		empty_inserts++;
+
 	while(true) {
 		std::unique_lock<std::mutex> lk(write_lock);
 		// printf("CQ: push: wait on not-full. full() = %s\n", (full())? "true" : "false");
 		cirq_full.wait_for(lk, std::chrono::seconds(2), [this]{return !full();});
 		if(!full()) {
+			queue_size++;
+			if (queue_size > max_queue_size)
+				max_queue_size = queue_size;
 			memcpy(queue_array[head].data, elm, size);
 			queue_array[head].dirty = true;
 			queue_array[head].size = size;
@@ -61,6 +68,7 @@ bool CircularQueue::peek(std::pair<int, queue_elm> &ret) {
 			int temp = tail;
 			queue_array[tail].touched = true;
 			tail = incr(tail);
+			queue_size--;
 			lk.unlock();
 
 			ret.first = temp;

@@ -86,6 +86,7 @@ nodes, int workers, bool reset=false) : dir(dir), M(size), B(b), N(nodes) {
 
 BufferTree::~BufferTree() {
 	printf("Closing BufferTree\n");
+	cq->get_stats();
 	// force_flush(); // flush everything to leaves (could just flush to files in higher levels)
 
 	// free malloc'd memory
@@ -366,19 +367,19 @@ flush_ret_t inline BufferTree::flush_leaf_node(BufferControlBlock *bcb, bool for
 		offset += len;
 	}
 
-	// printf("Trying to push leaf buffer (%i) of size %lu to cq\n", bcb->get_id(), bcb->size());
+	printf("Trying to push leaf buffer (%i) of size %lu to cq\n", bcb->get_id(), bcb->size());
 	// empty this leaf into the circular queue
 	// until empty or cq is full
 	// do so back to front
 	while(bcb->size() > 0 && (!cq->full() || force)) {
-		File_Pointer begin_offset = (bcb->size() > leaf_size)? bcb->size() - leaf_size - (bcb->size() % leaf_size) : 0;
+		File_Pointer begin_offset = (bcb->size() < 2 * leaf_size)? 0 : bcb->size() - leaf_size - page_size;
 
-		// printf("Pushing sketch %lu-%lu to the circular queue\n", begin_offset, bcb->size());
-		cq->push(read_buffers[level-1] + begin_offset, bcb->size() - (File_Pointer) begin_offset); // add the data we read to the circular queue
+		printf("Pushing sketch %lu-%lu to the circular queue\n", begin_offset, bcb->size());
+		cq->push(read_buffers[level-1] + begin_offset, bcb->size() - begin_offset); // add the data we read to the circular queue
 		
 		// reset the BufferControlBlock to the next leaf
 		bcb->reset(begin_offset);
-		// printf("new bcb size = %lu\n", bcb->size());
+		printf("new bcb size = %lu\n", bcb->size());
 	}
 }
 
@@ -421,7 +422,7 @@ bool BufferTree::get_data(data_ret_t &data) {
 
 		if (upd.first != key) {
 			// error to handle some weird unlikely buffer tree shenanigans
-			printf("source node %lu and key %lu do not match in get_data()\n", upd.first, key);
+			printf("ERROR: source node %lu and key %lu do not match in get_data()\n", upd.first, key);
 			throw KeyIncorrectError();
 		}
 

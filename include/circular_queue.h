@@ -61,6 +61,8 @@ public:
 	 */
 	void print();
 
+	void get_stats() {printf("%lu inserts to empty out of %lu total inserts. High water mark = %u\n", empty_inserts, inserts, max_queue_size);}
+
 	// functions for checking if the queue is empty or full
 	inline bool full()     {return queue_array[head].dirty;} // if the next data item is dirty then full
 	// if place to read from is clean and has not been peeked already then queue is empty
@@ -77,6 +79,11 @@ private:
 
 	// increment the head or tail pointer
 	inline int incr(int p) {return (p + 1) % len;}
+
+	uint64_t inserts        = 0;
+	uint64_t empty_inserts  = 0;
+	uint32_t queue_size     = 0;
+	uint32_t max_queue_size = 0;
 };
 
 class WriteTooBig : public std::exception {
