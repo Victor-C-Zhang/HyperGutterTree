@@ -160,10 +160,7 @@ void BufferTree::setup_tree() {
 			options--;
 			buffers.push_back(bcb);
 			index++; // seperate variable because sometimes we skip stuff
-			if(bcb->is_leaf())
-				size += leaf_size + page_size;
-			else 
-				size += buffer_size + page_size;
+			size += buffer_size + page_size;
 		}
 	}
 
@@ -315,12 +312,19 @@ flush_ret_t inline BufferTree::flush_root() {
 	// root_lock.unlock();
 }
 
-flush_ret_t inline BufferTree::flush_control_block(BufferControlBlock *bcb) {
+flush_ret_t inline BufferTree::flush_control_block(BufferControlBlock *bcb, bool force) {
 	// printf("flushing "); bcb->print();
 	if(bcb->size() == 0) {
 		return; // don't flush empty control blocks
 	}
 
+	if (bcb->is_leaf()) {
+		return flush_leaf_node(bcb, force);
+	}
+	return flush_internal_node(bcb);
+}
+
+flush_ret_t inline BufferTree::flush_internal_node(BufferControlBlock *bcb) {
 	// flushing a control block is the only time read_buffers are used
 	// and we call this on the bottom level of the tree (max_level) so
 	// level-1 for the read_buffers is important.
@@ -338,18 +342,44 @@ flush_ret_t inline BufferTree::flush_control_block(BufferControlBlock *bcb) {
 		offset += len;
 	}
 
-	if (bcb->is_leaf()) { // this is a leaf node
-		cq->push(read_buffers[level-1], bcb->size()); // add the data we read to the circular queue
-
-		// reset the BufferControlBlock (we have emptied it of data)
-		bcb->reset();
-		return;
-	}
-
 	// printf("read %lu bytes\n", len);
 
 	do_flush(read_buffers[level-1], bcb->size(), bcb->first_child, bcb->min_key, bcb->max_key, bcb->children_num, bcb->level);
 	bcb->reset();
+}
+
+flush_ret_t inline BufferTree::flush_leaf_node(BufferControlBlock *bcb, bool force) {
+	// first we need to establish if doing a write is best
+	if(cq->full() && bcb->size() < buffer_size && !force)
+		return; // don't do anything (use leaf as additional circular queue space)
+
+	uint32_t data_to_read = bcb->size();
+	uint8_t level = bcb->level;
+	uint32_t offset = 0;
+	while(data_to_read > 0) {
+		int len = pread(backing_store, read_buffers[level-1] + offset, data_to_read, bcb->offset() + offset);
+		if (len == -1) {
+			printf("ERROR flush failed to read from buffer %i, %s\n", bcb->get_id(), strerror(errno));
+			exit(EXIT_FAILURE);
+		}
+		data_to_read -= len;
+		offset += len;
+	}
+
+	// printf("Trying to push leaf buffer (%i) of size %lu to cq\n", bcb->get_id(), bcb->size());
+	// empty this leaf into the circular queue
+	// until empty or cq is full
+	// do so back to front
+	while(bcb->size() > 0 && (!cq->full() || force)) {
+		File_Pointer begin_offset = (bcb->size() > leaf_size)? bcb->size() - leaf_size - (bcb->size() % leaf_size) : 0;
+
+		// printf("Pushing sketch %lu-%lu to the circular queue\n", begin_offset, bcb->size());
+		cq->push(read_buffers[level-1] + begin_offset, bcb->size() - (File_Pointer) begin_offset); // add the data we read to the circular queue
+		
+		// reset the BufferControlBlock to the next leaf
+		bcb->reset(begin_offset);
+		// printf("new bcb size = %lu\n", bcb->size());
+	}
 }
 
 // ask the buffer tree for data
@@ -412,7 +442,7 @@ flush_ret_t BufferTree::force_flush() {
 	
 	for (BufferControlBlock *bcb : buffers) {
 		if (bcb != nullptr) {
-			flush_control_block(bcb);
+			flush_control_block(bcb, true);
 		}
 	}
 }

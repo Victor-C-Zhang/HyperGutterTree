@@ -14,21 +14,17 @@ BufferControlBlock::BufferControlBlock(buffer_id_t id, File_Pointer off, uint8_t
   storage_ptr = 0;
 }
 
-inline bool BufferControlBlock::needs_flush() {
+inline bool BufferControlBlock::needs_flush(uint32_t size) {
 	if(is_leaf())
-		return storage_ptr >= BufferTree::leaf_size;
+		return ((storage_ptr % BufferTree::leaf_size) < size) || (storage_ptr >= BufferTree::buffer_size);
 	else
 		return storage_ptr >= BufferTree::buffer_size;
 }
 
 bool BufferControlBlock::write(char *data, uint32_t size) {
 	// printf("Writing to buffer %d data pointer = %p with size %i\n", id, data, size);
-	if (is_leaf() && storage_ptr + size > BufferTree::leaf_size + BufferTree::page_size) {
-		printf("buffer %i too full [leaf] write size %u\n", id, size);
-		throw BufferFullError(id);
-	}
-	else if(storage_ptr + size > BufferTree::buffer_size + BufferTree::page_size) {
-		printf("buffer %i too full [internal node] write size %u\n", id, size);
+	if(storage_ptr + size > BufferTree::buffer_size + BufferTree::page_size) {
+		printf("buffer %i too full write size %u\n", id, size);
 		throw BufferFullError(id);
 	}
 
@@ -46,5 +42,5 @@ bool BufferControlBlock::write(char *data, uint32_t size) {
 	storage_ptr += size;
 
 	// return if this buffer should be added to the flush queue
-	return needs_flush();
+	return needs_flush(size);
 }

@@ -59,7 +59,9 @@ private:
    */
   char *root_node;
   flush_ret_t flush_root();
-  flush_ret_t flush_control_block(BufferControlBlock *bcb);
+  flush_ret_t flush_control_block(BufferControlBlock *bcb, bool force=false);
+  flush_ret_t flush_internal_node(BufferControlBlock *bcb);
+  flush_ret_t flush_leaf_node(BufferControlBlock *bcb, bool force);
   uint root_position;
   std::mutex root_lock;
 

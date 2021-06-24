@@ -80,14 +80,9 @@ TEST(BasicInsert, Medium) {
   run_test(nodes, num_updates, buf, branch);
 }
 
-// test where we fill the lowest buffers as full as we can
-// with insertions.
-TEST(BasicInsert, FillLowest) {
-  uint updates = (8 * MB) / BufferTree::serial_update_size;
-  updates -= updates % 8 + 8;
-
-  const int nodes = 8;
-  const int num_updates = updates;
+TEST(BasicInsert, ManyInserts) {
+  const int nodes = 32;
+  const int num_updates = 1000000;
   const int buf = MB;
   const int branch = 2;
 
