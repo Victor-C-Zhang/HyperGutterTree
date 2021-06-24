@@ -367,19 +367,19 @@ flush_ret_t inline BufferTree::flush_leaf_node(BufferControlBlock *bcb, bool for
 		offset += len;
 	}
 
-	printf("Trying to push leaf buffer (%i) of size %lu to cq\n", bcb->get_id(), bcb->size());
+	// printf("Trying to push leaf buffer (%i) of size %lu to cq\n", bcb->get_id(), bcb->size());
 	// empty this leaf into the circular queue
 	// until empty or cq is full
 	// do so back to front
 	while(bcb->size() > 0 && (!cq->full() || force || bcb->size() >= buffer_size)) {
 		File_Pointer begin_offset = (bcb->size() < 2 * leaf_size)? 0 : bcb->size() - leaf_size - page_size;
 
-		printf("Pushing sketch %lu-%lu to the circular queue\n", begin_offset, bcb->size());
+		// printf("Pushing sketch %lu-%lu to the circular queue\n", begin_offset, bcb->size());
 		cq->push(read_buffers[level-1] + begin_offset, bcb->size() - begin_offset); // add the data we read to the circular queue
 		
 		// reset the BufferControlBlock to the next leaf
 		bcb->reset(begin_offset);
-		printf("new bcb size = %lu\n", bcb->size());
+		// printf("new bcb size = %lu\n", bcb->size());
 	}
 }
 
