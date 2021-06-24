@@ -371,7 +371,7 @@ flush_ret_t inline BufferTree::flush_leaf_node(BufferControlBlock *bcb, bool for
 	// empty this leaf into the circular queue
 	// until empty or cq is full
 	// do so back to front
-	while(bcb->size() > 0 && (!cq->full() || force)) {
+	while(bcb->size() > 0 && (!cq->full() || force || bcb->size() >= buffer_size)) {
 		File_Pointer begin_offset = (bcb->size() < 2 * leaf_size)? 0 : bcb->size() - leaf_size - page_size;
 
 		printf("Pushing sketch %lu-%lu to the circular queue\n", begin_offset, bcb->size());
