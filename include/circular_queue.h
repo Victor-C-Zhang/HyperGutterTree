@@ -4,6 +4,7 @@
 #include <condition_variable>
 #include <mutex>
 #include <utility>
+#include <atomic>
 
 struct queue_elm {
 	volatile bool dirty;    // is this queue element yet to be processed by sketching (if so do not overwrite)
@@ -82,7 +83,7 @@ private:
 
 	uint64_t inserts        = 0;
 	uint64_t empty_inserts  = 0;
-	uint32_t queue_size     = 0;
+	std::atomic<uint32_t> queue_size;
 	uint32_t max_queue_size = 0;
 };
 

@@ -24,7 +24,7 @@ int      BufferTree::backing_store;
  * We assume that node indices begin at 0 and increase to N-1
  */
 BufferTree::BufferTree(std::string dir, uint32_t size, uint32_t b, Node
-nodes, int workers, bool reset=false) : dir(dir), M(size), B(b), N(nodes) {
+nodes, int workers, int queue_factor, bool reset=false) : dir(dir), M(size), B(b), N(nodes) {
 	page_size = 4 * sysconf(_SC_PAGE_SIZE); // works on POSIX systems (alternative is boost)
 	int file_flags = O_RDWR | O_CREAT; // direct memory O_DIRECT may or may not be good
 	if (reset) {
@@ -73,8 +73,7 @@ nodes, int workers, bool reset=false) : dir(dir), M(size), B(b), N(nodes) {
 	setup_tree(); // setup the buffer tree
 
 	// create the circular queue in which we will place ripe fruit (full leaves)
-	// make space for full 16 * workers full updates
-	cq = new CircularQueue(16*workers, leaf_size + page_size);
+	cq = new CircularQueue(queue_factor*workers, leaf_size + page_size);
 	
 	// will want to use mmap instead? - how much is in RAM after allocation (none?)
 	// can't use mmap instead might use it as well. (Still need to create the file to be a given size)

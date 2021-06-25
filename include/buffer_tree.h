@@ -94,9 +94,10 @@ public:
    * @param b       branching factor.
    * @param nodes   number of nodes in the graph
    * @param workers the number of workers which will be using this buffer tree (defaults to 1)
+   * @param queue_factor  the factor we multiply by workers to get number of queue slots
    * @param reset   should truncate the file storage upon opening
    */
-  BufferTree(std::string dir, uint32_t size, uint32_t b, Node nodes, int workers, bool reset);
+  BufferTree(std::string dir, uint32_t size, uint32_t b, Node nodes, int workers, int queue_factor, bool reset);
   ~BufferTree();
   /**
    * Puts an update into the data structure.
