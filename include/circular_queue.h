@@ -69,8 +69,8 @@ public:
 	// if place to read from is clean and has not been peeked already then queue is empty
 	inline bool empty()    {return !queue_array[tail].dirty || queue_array[tail].touched;}
 private:
-	int len;      // maximum number of data elements to be stored in the queue
-	int elm_size; // size of an individual element in bytes
+	int64_t len;      // maximum number of data elements to be stored in the queue
+	int64_t elm_size; // size of an individual element in bytes
 
 	int head;     // where to push (starts at 0, write pointer)
 	int tail;     // where to peek (starts at 0, read pointer)

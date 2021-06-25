@@ -22,7 +22,7 @@ CircularQueue::CircularQueue(int num_elements, int size_of_elm):
 		queue_array[i].size    = 0;
 	}
 
-	printf("CQ: created circular queue with %i elements each of size %i\n", len, elm_size);
+	printf("CQ: created circular queue with %li elements each of size %li\n", len, elm_size);
 }
 
 CircularQueue::~CircularQueue() {
@@ -33,7 +33,7 @@ CircularQueue::~CircularQueue() {
 
 void CircularQueue::push(char *elm, int size) {
 	if(size > elm_size) {
-		printf("write of size %i bytes greater than max of %i\n", size, elm_size);
+		printf("write of size %i bytes greater than max of %li\n", size, elm_size);
 		throw WriteTooBig();
 	}
 
