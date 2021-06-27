@@ -58,7 +58,7 @@ void run_test(const int nodes, const uint64_t num_updates, const uint64_t buffer
     printf("Running Test: nodes=%i num_updates=%lu buffer_size %lu branch_factor %i\n",
          nodes, num_updates, buffer_size, branch_factor);
 
-    BufferTree *buf_tree = new BufferTree("./test_", buffer_size, branch_factor, nodes, threads, 16, true);
+    BufferTree *buf_tree = new BufferTree("./test_", buffer_size, branch_factor, nodes, threads, 16);
     shutdown = false;
     upd_processed = 0;
 

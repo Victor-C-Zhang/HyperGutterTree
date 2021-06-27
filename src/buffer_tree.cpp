@@ -1,9 +1,10 @@
 #include "../include/buffer_tree.h"
 
 #include <utility>
-#include <unistd.h> //sysconf
-#include <string.h> //memcpy
-#include <fcntl.h>  //posix_fallocate
+#include <unistd.h>   //sysconf
+#include <string.h>   //memcpy
+#include <fcntl.h>    //posix_fallocate
+#include <sys/mman.h> // mmap
 #include <errno.h>
 
 /*
@@ -14,7 +15,7 @@ uint8_t  BufferTree::max_level;
 uint32_t BufferTree::buffer_size;
 uint64_t BufferTree::backing_EOF;
 uint64_t BufferTree::leaf_size;
-int      BufferTree::backing_store;
+char *   BufferTree::mapped_store;
 
 
 /*
@@ -24,12 +25,11 @@ int      BufferTree::backing_store;
  * We assume that node indices begin at 0 and increase to N-1
  */
 BufferTree::BufferTree(std::string dir, uint32_t size, uint32_t b, Node
-nodes, int workers, int queue_factor, bool reset=false) : dir(dir), M(size), B(b), N(nodes) {
-	page_size = 4 * sysconf(_SC_PAGE_SIZE); // works on POSIX systems (alternative is boost)
-	int file_flags = O_RDWR | O_CREAT; // direct memory O_DIRECT may or may not be good
-	if (reset) {
-		file_flags |= O_TRUNC;
-	}
+nodes, int workers, int queue_factor) : dir(dir), M(size), B(b), N(nodes) {
+	page_size = sysconf(_SC_PAGE_SIZE); // works on POSIX systems (alternative is boost)
+	page_size = (page_size % serial_update_size == 0)? page_size : page_size + serial_update_size - page_size % serial_update_size;
+
+	int file_flags = O_RDWR | O_CREAT | O_TRUNC; // direct memory O_DIRECT may or may not be good
 
 	if (M < page_size) {
 		printf("WARNING: requested buffer size smaller than page_size. Set to page_size.\n");
@@ -40,8 +40,10 @@ nodes, int workers, int queue_factor, bool reset=false) : dir(dir), M(size), B(b
 	max_level       = ceil(log(N) / log(B));
 	buffer_size     = M; // probably figure out a better solution than this
 	backing_EOF     = 0;
+	
+	// setup the size of a leaf update and assert that it is a multiple of serial_update_size
 	leaf_size       = floor(24 * pow(log2(N), 3)); // size of leaf proportional to size of sketch
-	leaf_size       = (leaf_size < page_size)? page_size : leaf_size; //enforce size of at least page_size
+	leaf_size       = (leaf_size % serial_update_size == 0)? leaf_size : leaf_size + serial_update_size - leaf_size % serial_update_size;
 
 	// malloc the memory for the root node
 	root_node = (char *) malloc(buffer_size);
@@ -107,7 +109,7 @@ BufferTree::~BufferTree() {
 			delete buffers[i];
 	}
 	delete cq;
-	close(backing_store);
+	munmap(mapped_store, backing_EOF);
 }
 
 void print_tree(std::vector<BufferControlBlock *>bcb_list) {
@@ -160,17 +162,32 @@ void BufferTree::setup_tree() {
 			options--;
 			buffers.push_back(bcb);
 			index++; // seperate variable because sometimes we skip stuff
+			// if(bcb->is_leaf())
+			// 	size += leaf_size + page_size;
+			// else 
+			// 	size += buffer_size + page_size;
 			size += buffer_size + page_size;
 		}
 	}
 
     // allocate file space for all the nodes to prevent fragmentation
-    #ifdef HAVE_FALLOCATE
-	fallocate(backing_store, 0, 0, size); // linux only but fast
-	#else
-	posix_fallocate(backing_store, 0, size); // portable but much slower
-    #endif
-    
+ //    #ifdef HAVE_FALLOCATE
+	// fallocate(backing_store, 0, 0, size); // linux only but fast
+	// #else
+	// posix_fallocate(backing_store, 0, size); // portable but much slower
+ //    #endif
+
+	ftruncate(backing_store, size);
+
+	printf("creating mapping\n");
+    // now use mmap to create a mapping to this file
+    mapped_store = (char *) mmap(NULL, size, PROT_READ | PROT_WRITE, MAP_PRIVATE, backing_store, 0);
+    if(mapped_store == (void *)-1) {
+    	fprintf(stderr, "Failed to create mmap to backing_store! error=%s\n", strerror(errno));
+		exit(1);
+    }
+    close(backing_store);
+
     backing_EOF = size;
     // print_tree(buffers);
 }
@@ -325,46 +342,17 @@ flush_ret_t inline BufferTree::flush_control_block(BufferControlBlock *bcb, bool
 }
 
 flush_ret_t inline BufferTree::flush_internal_node(BufferControlBlock *bcb) {
-	// flushing a control block is the only time read_buffers are used
-	// and we call this on the bottom level of the tree (max_level) so
-	// level-1 for the read_buffers is important.
-
-	uint32_t data_to_read = bcb->size();
-	uint8_t level = bcb->level;
-	uint32_t offset = 0;
-	while(data_to_read > 0) {
-		int len = pread(backing_store, read_buffers[level-1] + offset, data_to_read, bcb->offset() + offset);
-		if (len == -1) {
-			printf("ERROR flush failed to read from buffer %i, %s\n", bcb->get_id(), strerror(errno));
-			exit(EXIT_FAILURE);
-		}
-		data_to_read -= len;
-		offset += len;
-	}
-
-	// printf("read %lu bytes\n", len);
-
-	do_flush(read_buffers[level-1], bcb->size(), bcb->first_child, bcb->min_key, bcb->max_key, bcb->children_num, bcb->level);
+	do_flush(mapped_store + bcb->offset(), bcb->size(), bcb->first_child, bcb->min_key, bcb->max_key, bcb->children_num, bcb->level);
 	bcb->reset();
 }
 
 flush_ret_t inline BufferTree::flush_leaf_node(BufferControlBlock *bcb, bool force) {
+	// cq->push(mapped_store + bcb->offset(), bcb->size()); // add the data we read to the circular queue
+	// bcb->reset();
+
 	// first we need to establish if doing a write is best
 	if(cq->full() && bcb->size() < buffer_size && !force)
 		return; // don't do anything (use leaf as additional circular queue space)
-
-	uint32_t data_to_read = bcb->size();
-	uint8_t level = bcb->level;
-	uint32_t offset = 0;
-	while(data_to_read > 0) {
-		int len = pread(backing_store, read_buffers[level-1] + offset, data_to_read, bcb->offset() + offset);
-		if (len == -1) {
-			printf("ERROR flush failed to read from buffer %i, %s\n", bcb->get_id(), strerror(errno));
-			exit(EXIT_FAILURE);
-		}
-		data_to_read -= len;
-		offset += len;
-	}
 
 	// printf("Trying to push leaf buffer (%i) of size %lu to cq\n", bcb->get_id(), bcb->size());
 	// empty this leaf into the circular queue
@@ -373,8 +361,8 @@ flush_ret_t inline BufferTree::flush_leaf_node(BufferControlBlock *bcb, bool for
 	while(bcb->size() > 0 && (!cq->full() || force || bcb->size() >= buffer_size)) {
 		File_Pointer begin_offset = (bcb->size() < leaf_size + page_size)? 0 : bcb->size() - leaf_size - page_size;
 
-		// printf("Pushing sketch %lu-%lu to the circular queue\n", begin_offset, bcb->size());
-		cq->push(read_buffers[level-1] + begin_offset, bcb->size() - begin_offset); // add the data we read to the circular queue
+		// printf("Pushing from leaf %i sketch %lu-%lu to the circular queue\n", bcb->get_id(), begin_offset, bcb->size());
+		cq->push(mapped_store + bcb->offset() + begin_offset, bcb->size() - begin_offset); // add the data we read to the circular queue
 		
 		// reset the BufferControlBlock to the next leaf
 		bcb->reset(begin_offset);
@@ -399,10 +387,12 @@ bool BufferTree::get_data(data_ret_t &data) {
 	char *serial_data = elm.data;
 	uint32_t len      = elm.size;
 
+	// printf("got back batch of updates of length %u\n", len);
+
 	if (len == 0) {
 		cq->pop(i);
 		return false; // we got no data so return not valid
-        }
+	}
 
 	data.second.clear(); // remove any old data from the vector
 	uint32_t vec_len  = len / serial_update_size;
@@ -411,6 +401,7 @@ bool BufferTree::get_data(data_ret_t &data) {
 	// assume the first key is correct so extract it
 	Node key = load_key(serial_data);
 	data.first = key;
+	// printf("key = %lu\n", key);
 
 	while(idx < (uint64_t) len) {
 		update_t upd = deserialize_update(serial_data + idx);
