@@ -52,11 +52,9 @@ nodes, int workers, int queue_factor) : dir(dir), M(size), B(b), N(nodes) {
 	// malloc the memory used when flushing
 	flush_buffers   = (char ***) malloc(sizeof(char **) * max_level);
 	flush_positions = (char ***) malloc(sizeof(char **) * max_level);
-	read_buffers    = (char **)  malloc(sizeof(char *)  * max_level);
 	for (int l = 0; l < max_level; l++) {
 		flush_buffers[l]   = (char **) malloc(sizeof(char *) * B);
 		flush_positions[l] = (char **) malloc(sizeof(char *) * B);
-		read_buffers[l]    = (char *)  malloc(sizeof(char) * (buffer_size + page_size));
 		for (uint i = 0; i < B; i++) {
 			flush_buffers[l][i] = (char *) calloc(page_size, sizeof(char));
 		}
@@ -93,7 +91,6 @@ BufferTree::~BufferTree() {
 	// free malloc'd memory
 	for(int l = 0; l < max_level; l++) {
 		free(flush_positions[l]);
-		free(read_buffers[l]);
 		for (uint16_t i = 0; i < B; i++) {
 			free(flush_buffers[l][i]);
 		}
@@ -101,7 +98,6 @@ BufferTree::~BufferTree() {
 	}
 	free(flush_buffers);
 	free(flush_positions);
-	free(read_buffers);
 
 	free(root_node);
 	for(uint i = 0; i < buffers.size(); i++) {

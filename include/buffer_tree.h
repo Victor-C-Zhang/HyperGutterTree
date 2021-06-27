@@ -52,7 +52,6 @@ private:
   // we could just read back from disk instead (more IOs though)
   char ***flush_buffers;
   char ***flush_positions; // pointers into the flush_buffers
-  char **read_buffers;
 
   /*
    * root node and functions for handling it
