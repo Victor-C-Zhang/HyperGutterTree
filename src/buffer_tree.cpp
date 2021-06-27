@@ -26,6 +26,7 @@ int      BufferTree::backing_store;
 BufferTree::BufferTree(std::string dir, uint32_t size, uint32_t b, Node
 nodes, int workers, int queue_factor, bool reset=false) : dir(dir), M(size), B(b), N(nodes) {
 	page_size = 8 * sysconf(_SC_PAGE_SIZE); // works on POSIX systems (alternative is boost)
+	page_size = (page_size % serial_update_size == 0)? page_size : page_size + serial_update_size - page_size % serial_update_size;
 	int file_flags = O_RDWR | O_CREAT; // direct memory O_DIRECT may or may not be good
 	if (reset) {
 		file_flags |= O_TRUNC;
@@ -41,7 +42,7 @@ nodes, int workers, int queue_factor, bool reset=false) : dir(dir), M(size), B(b
 	buffer_size     = M; // probably figure out a better solution than this
 	backing_EOF     = 0;
 	leaf_size       = floor(24 * pow(log2(N), 3)); // size of leaf proportional to size of sketch
-	leaf_size       = (leaf_size < page_size)? page_size : leaf_size; //enforce size of at least page_size
+	leaf_size       = (leaf_size % serial_update_size == 0)? leaf_size : leaf_size + serial_update_size - leaf_size % serial_update_size;
 
 	// malloc the memory for the root node
 	root_node = (char *) malloc(buffer_size);
