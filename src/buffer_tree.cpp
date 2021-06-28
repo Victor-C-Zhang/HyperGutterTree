@@ -63,7 +63,7 @@ nodes, int workers, int queue_factor, bool reset=false) : dir(dir), M(size), B(b
 			flush_buffers[l][i] = (char *) calloc(page_size, sizeof(char));
 		}
 	}
-	cache = (char *) malloc(B * (buffer_size + page_size));
+	cache = (char *) malloc(B * ((uint64_t)buffer_size + page_size));
 
 	// open the file which will be our backing store for the non-root nodes
 	// create it if it does not already exist
