@@ -181,6 +181,8 @@ public:
    * File descriptor of backing file for storage
    */
   static int backing_store;
+  // a chunk of memory we reserve to cache the first level of the buffer tree
+  static char *cache;
 };
 
 class BufferFullError : public std::exception {
