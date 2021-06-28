@@ -15,6 +15,7 @@ uint32_t BufferTree::buffer_size;
 uint64_t BufferTree::backing_EOF;
 uint64_t BufferTree::leaf_size;
 int      BufferTree::backing_store;
+char *   BufferTree::cache;
 
 
 /*
@@ -25,7 +26,9 @@ int      BufferTree::backing_store;
  */
 BufferTree::BufferTree(std::string dir, uint32_t size, uint32_t b, Node
 nodes, int workers, int queue_factor, bool reset=false) : dir(dir), M(size), B(b), N(nodes) {
-	page_size = 8 * sysconf(_SC_PAGE_SIZE); // works on POSIX systems (alternative is boost)
+	// we do 5 * page_size here because we're going to set this up so that average flush should be 4 *
+	// however, we don't want to do tiny writes if we can help it so that's why 5 *
+	page_size = 5 * sysconf(_SC_PAGE_SIZE); // works on POSIX systems (alternative is boost)
 	page_size = (page_size % serial_update_size == 0)? page_size : page_size + serial_update_size - page_size % serial_update_size;
 	int file_flags = O_RDWR | O_CREAT | O_DIRECT; // direct memory O_DIRECT may or may not be good
 	if (reset) {
@@ -55,11 +58,12 @@ nodes, int workers, int queue_factor, bool reset=false) : dir(dir), M(size), B(b
 	for (int l = 0; l < max_level; l++) {
 		flush_buffers[l]   = (char **) malloc(sizeof(char *) * B);
 		flush_positions[l] = (char **) malloc(sizeof(char *) * B);
-		read_buffers[l]    = (char *)  malloc(sizeof(char) * (buffer_size + page_size));
+		if(l != 0) read_buffers[l]    = (char *)  malloc(sizeof(char) * (buffer_size + page_size));
 		for (uint i = 0; i < B; i++) {
 			flush_buffers[l][i] = (char *) calloc(page_size, sizeof(char));
 		}
 	}
+	cache = (char *) malloc(B * (buffer_size + page_size));
 
 	// open the file which will be our backing store for the non-root nodes
 	// create it if it does not already exist
@@ -92,7 +96,7 @@ BufferTree::~BufferTree() {
 	// free malloc'd memory
 	for(int l = 0; l < max_level; l++) {
 		free(flush_positions[l]);
-		free(read_buffers[l]);
+		if (l != 0) free(read_buffers[l]);
 		for (uint16_t i = 0; i < B; i++) {
 			free(flush_buffers[l][i]);
 		}
@@ -102,6 +106,7 @@ BufferTree::~BufferTree() {
 	free(flush_positions);
 	free(read_buffers);
 
+	free(cache);
 	free(root_node);
 	for(uint i = 0; i < buffers.size(); i++) {
 		if (buffers[i] != nullptr)
@@ -125,6 +130,9 @@ void BufferTree::setup_tree() {
 
 	// create the BufferControlBlocks
 	for (uint l = 1; l <= max_level; l++) { // loop through all levels
+		if(l == 2) {
+			size = 0; // reset the size because the first level is held in cache
+		}
 		uint level_size    = pow(B, l); // number of blocks in this level
 		uint plevel_size   = pow(B, l-1);
 		uint start         = buffers.size();
@@ -335,16 +343,22 @@ flush_ret_t inline BufferTree::flush_internal_node(BufferControlBlock *bcb) {
 
 	uint32_t data_to_read = bcb->size();
 	uint8_t level = bcb->level;
-	uint32_t offset = 0;
-	lseek(backing_store, bcb->offset(), SEEK_SET);
-	while(data_to_read > 0) {
-		int len = read(backing_store, read_buffers[level-1] + offset, data_to_read);
-		if (len == -1) {
-			printf("ERROR flush failed to read from buffer %i, %s\n", bcb->get_id(), strerror(errno));
-			exit(EXIT_FAILURE);
+
+	if (level == 1) { // we have this in cache
+		read_buffers[level-1] = cache + bcb->offset();
+	}
+	else {
+		uint32_t offset = 0;
+		lseek(backing_store, bcb->offset(), SEEK_SET);
+		while(data_to_read > 0) {
+			int len = read(backing_store, read_buffers[level-1] + offset, data_to_read);
+			if (len == -1) {
+				printf("ERROR flush failed to read from buffer %i, %s\n", bcb->get_id(), strerror(errno));
+				exit(EXIT_FAILURE);
+			}
+			data_to_read -= len;
+			offset += len;
 		}
-		data_to_read -= len;
-		offset += len;
 	}
 
 	// printf("read %lu bytes\n", len);
@@ -360,16 +374,22 @@ flush_ret_t inline BufferTree::flush_leaf_node(BufferControlBlock *bcb, bool for
 
 	uint32_t data_to_read = bcb->size();
 	uint8_t level = bcb->level;
-	uint32_t offset = 0;
-	lseek(backing_store, bcb->offset(), SEEK_SET);
-	while(data_to_read > 0) {
-		int len = read(backing_store, read_buffers[level-1] + offset, data_to_read);
-		if (len == -1) {
-			printf("ERROR flush failed to read from buffer %i, %s\n", bcb->get_id(), strerror(errno));
-			exit(EXIT_FAILURE);
+
+	if (level == 1) { // we have this in cache
+		read_buffers[level-1] = cache + bcb->offset();
+	}
+	else {
+		uint32_t offset = 0;
+		lseek(backing_store, bcb->offset(), SEEK_SET);
+		while(data_to_read > 0) {
+			int len = read(backing_store, read_buffers[level-1] + offset, data_to_read);
+			if (len == -1) {
+				printf("ERROR flush failed to read from buffer %i, %s\n", bcb->get_id(), strerror(errno));
+				exit(EXIT_FAILURE);
+			}
+			data_to_read -= len;
+			offset += len;
 		}
-		data_to_read -= len;
-		offset += len;
 	}
 
 	// printf("Trying to push leaf buffer (%i) of size %lu to cq\n", bcb->get_id(), bcb->size());

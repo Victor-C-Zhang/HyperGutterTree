@@ -28,6 +28,12 @@ bool BufferControlBlock::write_buf(char *data, uint32_t size) {
 		throw BufferFullError(id);
 	}
 
+	if (level == 1) { // we cache the first level of the buffer tree
+		memcpy(BufferTree::cache + file_offset + storage_ptr, data, size);
+		storage_ptr += size;
+		return needs_flush(size);
+	}
+
 	lseek(BufferTree::backing_store, file_offset + storage_ptr, SEEK_SET);
 
 	int len = write(BufferTree::backing_store, data, size);
