@@ -27,7 +27,7 @@ BufferTree::BufferTree(std::string dir, uint32_t size, uint32_t b, Node
 nodes, int workers, int queue_factor, bool reset=false) : dir(dir), M(size), B(b), N(nodes) {
 	page_size = 8 * sysconf(_SC_PAGE_SIZE); // works on POSIX systems (alternative is boost)
 	page_size = (page_size % serial_update_size == 0)? page_size : page_size + serial_update_size - page_size % serial_update_size;
-	int file_flags = O_RDWR | O_CREAT; // direct memory O_DIRECT may or may not be good
+	int file_flags = O_RDWR | O_CREAT | O_DIRECT; // direct memory O_DIRECT may or may not be good
 	if (reset) {
 		file_flags |= O_TRUNC;
 	}
@@ -287,7 +287,7 @@ flush_ret_t BufferTree::do_flush(char *data, uint32_t data_size, uint32_t begin,
 		if (flush_pos[child] - flush_buf[child] >= full_flush) {
 			// write to our child, return value indicates if it needs to be flushed
 			uint size = flush_pos[child] - flush_buf[child];
-			if(buffers[begin+child]->write(flush_buf[child], size)) {
+			if(buffers[begin+child]->write_buf(flush_buf[child], size)) {
 				flush_control_block(buffers[begin+child]);
 			}
 
@@ -301,7 +301,7 @@ flush_ret_t BufferTree::do_flush(char *data, uint32_t data_size, uint32_t begin,
 		if (flush_pos[i] - flush_buf[i] > 0) {
 			// write to child i, return value indicates if it needs to be flushed
 			uint size = flush_pos[i] - flush_buf[i];
-			if(buffers[begin+i]->write(flush_buf[i], size)) {
+			if(buffers[begin+i]->write_buf(flush_buf[i], size)) {
 				flush_control_block(buffers[begin+i]);
 			}
 		}
@@ -336,8 +336,9 @@ flush_ret_t inline BufferTree::flush_internal_node(BufferControlBlock *bcb) {
 	uint32_t data_to_read = bcb->size();
 	uint8_t level = bcb->level;
 	uint32_t offset = 0;
+	lseek(backing_store, bcb->offset(), SEEK_SET);
 	while(data_to_read > 0) {
-		int len = pread(backing_store, read_buffers[level-1] + offset, data_to_read, bcb->offset() + offset);
+		int len = read(backing_store, read_buffers[level-1] + offset, data_to_read);
 		if (len == -1) {
 			printf("ERROR flush failed to read from buffer %i, %s\n", bcb->get_id(), strerror(errno));
 			exit(EXIT_FAILURE);
@@ -360,8 +361,9 @@ flush_ret_t inline BufferTree::flush_leaf_node(BufferControlBlock *bcb, bool for
 	uint32_t data_to_read = bcb->size();
 	uint8_t level = bcb->level;
 	uint32_t offset = 0;
+	lseek(backing_store, bcb->offset(), SEEK_SET);
 	while(data_to_read > 0) {
-		int len = pread(backing_store, read_buffers[level-1] + offset, data_to_read, bcb->offset() + offset);
+		int len = read(backing_store, read_buffers[level-1] + offset, data_to_read);
 		if (len == -1) {
 			printf("ERROR flush failed to read from buffer %i, %s\n", bcb->get_id(), strerror(errno));
 			exit(EXIT_FAILURE);

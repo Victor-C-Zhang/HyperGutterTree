@@ -66,7 +66,7 @@ public:
    * @param size the size in bytes of the data to write
    * @return true if buffer needs flush and false otherwise
    */
-  bool write(char *data, uint32_t size);
+  bool write_buf(char *data, uint32_t size);
 
   /*
    * Flush the buffer this block controls

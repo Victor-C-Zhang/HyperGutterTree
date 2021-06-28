@@ -21,14 +21,16 @@ inline bool BufferControlBlock::needs_flush(uint32_t size) {
 		return storage_ptr >= BufferTree::buffer_size;
 }
 
-bool BufferControlBlock::write(char *data, uint32_t size) {
+bool BufferControlBlock::write_buf(char *data, uint32_t size) {
 	// printf("Writing to buffer %d data pointer = %p with size %i\n", id, data, size);
 	if(storage_ptr + size > BufferTree::buffer_size + BufferTree::page_size) {
 		printf("buffer %i too full write size %u\n", id, size);
 		throw BufferFullError(id);
 	}
 
-	int len = pwrite(BufferTree::backing_store, data, size, file_offset + storage_ptr);
+	lseek(BufferTree::backing_store, file_offset + storage_ptr, SEEK_SET);
+
+	int len = write(BufferTree::backing_store, data, size);
 	int w = 0;
 	while(len < (int32_t)size) {
 		if (len == -1) {
@@ -37,7 +39,7 @@ bool BufferControlBlock::write(char *data, uint32_t size) {
 		}
 		w += len;
 		size -= len;
-		len = pwrite(BufferTree::backing_store, data + w, size, file_offset + storage_ptr + w);
+		len = write(BufferTree::backing_store, data + w, size);
 	}
 	storage_ptr += size;
 
