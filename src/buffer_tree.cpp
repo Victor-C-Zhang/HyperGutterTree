@@ -470,6 +470,9 @@ bool BufferTree::get_data(data_ret_t &data) {
 // Helper function for force flush. This function flushes an entire subtree rooted at one
 // of our cached root buffers
 flush_ret_t BufferTree::flush_subtree(buffer_id_t first_child) {
+	BufferControlBlock *root = buffers[first_child];
+	root->lock();
+
 	buffer_id_t num_children = 1;
 	for(int l = 0; l < max_level; l++) {
 		buffer_id_t new_first_child  = 0;
@@ -483,9 +486,13 @@ flush_ret_t BufferTree::flush_subtree(buffer_id_t first_child) {
 		first_child  = new_first_child;
 		num_children = new_num_children;
 	}
+	root->unlock();
 }
 
 flush_ret_t BufferTree::force_flush() {
+	// Tell the BufferFlushers to flush the entire subtrees
+	BufferFlusher::force_flush = true;
+
 	// add each of the roots to the flush_queue
 	BufferFlusher::queue_lock.lock();
 	for (buffer_id_t idx = 0; idx < B && idx < buffers.size(); idx++) {

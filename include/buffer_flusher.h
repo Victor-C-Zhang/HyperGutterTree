@@ -12,6 +12,7 @@ class BufferFlusher {
 public:
 	static std::condition_variable flush_ready;
 	static bool shutdown;
+	static bool force_flush;
 	static std::queue<uint32_t> flush_queue;
 	static std::mutex queue_lock;
 

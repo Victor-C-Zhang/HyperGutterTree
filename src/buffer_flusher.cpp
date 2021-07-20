@@ -1,14 +1,16 @@
 #include "../include/buffer_flusher.h"
 #include "../include/buffer_tree.h"
 
-bool BufferFlusher::shutdown = false;
+bool BufferFlusher::shutdown    = false;
+bool BufferFlusher::force_flush = false;
 std::condition_variable BufferFlusher::flush_ready;
 std::queue<buffer_id_t> BufferFlusher::flush_queue;
 std::mutex BufferFlusher::queue_lock;
 
 BufferFlusher::BufferFlusher(uint32_t id, BufferTree *bt) 
  : id(id), bt(bt) {
- 	shutdown = false;
+ 	shutdown    = false;
+ 	force_flush = false;
  	pthread_create(&thr, NULL, BufferFlusher::start_flusher, this);
 }
 
@@ -33,10 +35,16 @@ void BufferFlusher::do_work() {
 				exit(EXIT_FAILURE);
 			}
 
-			BufferControlBlock *bcb = bt->buffers[bcb_id];
-			bcb->lock();
-			bt->flush_control_block(bcb);
-			bcb->unlock();
+			
+			if (force_flush) {
+				bt->flush_subtree(bcb_id);
+			}
+			else {
+				BufferControlBlock *bcb = bt->buffers[bcb_id];
+				bcb->lock();
+				bt->flush_control_block(bcb);
+				bcb->unlock();
+			}
 			BufferControlBlock::buffer_ready.notify_one();
 		} else if (shutdown) {
 			// printf("BufferFlusher %i shutting down\n", id);
