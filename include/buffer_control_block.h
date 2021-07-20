@@ -40,6 +40,8 @@ private:
    */
   bool needs_flush(uint32_t size);
 
+  std::mutex buf_lock;
+
 public:
   // this node's level in the tree. 0 is root, 1 is it's children, etc
   uint8_t level;
@@ -68,6 +70,11 @@ public:
    */
   bool write(char *data, uint32_t size);
 
+  // synchronization functions. Should be called when root buffers are read or written to.
+  // Other buffers should not require synchronization
+  void lock() {buf_lock.lock();}
+  void unlock() {buf_lock.unlock();}
+
   /*
    * Flush the buffer this block controls
    * @return nothing
@@ -76,7 +83,7 @@ public:
 
   inline bool is_leaf()  {return min_key == max_key;}
 
-  inline void reset(File_Pointer npos=0) {storage_ptr = npos;}
+  inline void set_size(File_Pointer npos=0) {storage_ptr = npos;}
   inline buffer_id_t get_id() {return id;}
   inline File_Pointer size() {return storage_ptr;}
   inline File_Pointer offset() {return file_offset;}
@@ -86,9 +93,12 @@ public:
   }
 
   inline void print() {
-    printf("buffer %u: storage_ptr = %lu, offset = %lu, min_key=%lu, max_key=%lu, first_child=%u, #children=%u\n", 
-      id, storage_ptr, file_offset, min_key, max_key, first_child, children_num);
+    printf("buffer %u: level = %u, storage_ptr = %lu, offset = %lu, min_key=%lu, max_key=%lu, first_child=%u, #children=%u\n", 
+      id, level, storage_ptr, file_offset, min_key, max_key, first_child, children_num);
   }
+
+  static std::condition_variable buffer_ready;
+  static std::mutex buffer_ready_lock;
 };
 
 class BufferNotLockedError : public std::exception {

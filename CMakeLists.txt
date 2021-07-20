@@ -64,6 +64,8 @@ add_library(FastBufferTree
     include/buffer_tree.h
     src/buffer_control_block.cpp
     include/buffer_control_block.h
+    src/buffer_flusher.cpp
+    include/buffer_flusher.h
     src/circular_queue.cpp
     include/circular_queue.h
     include/update.h)
@@ -85,13 +87,13 @@ if (UNIX AND NOT APPLE)
   target_compile_options(FastBufferTree PRIVATE -DHAVE_FALLOCATE)
 endif ()
 set_target_properties(FastBufferTree PROPERTIES PUBLIC_HEADER 
-  "include/buffer_tree.h;include/buffer_control_block.h;include/circular_queue.h;include/update.h"
+  "include/buffer_tree.h;include/buffer_control_block.h;include/buffer_flusher.h;include/circular_queue.h;include/update.h"
 )
 
 add_executable(buffertree_tests
   test/runner.cpp
   test/basic_test.cpp)
-target_link_libraries(buffertree_tests PRIVATE GTest::gtest FastBufferTree)
+target_link_libraries(buffertree_tests PUBLIC GTest::gtest FastBufferTree)
 # optimize unless debug
 if (DEFINED ENV{DEBUG})
   message("Disabling optimizations and enabling debug symbols")
@@ -107,7 +109,7 @@ endif ()
 add_executable(buffer_experiment
   experiment/runner.cpp
   experiment/experiment.cpp)
-target_link_libraries(buffer_experiment PRIVATE GTest::gtest FastBufferTree)
+target_link_libraries(buffer_experiment PUBLIC GTest::gtest FastBufferTree)
 # optimize unless debug
 if (DEFINED ENV{DEBUG})
   message("Disabling optimizations and enabling debug symbols")

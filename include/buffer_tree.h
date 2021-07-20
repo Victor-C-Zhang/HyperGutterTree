@@ -15,6 +15,8 @@ typedef void insert_ret_t;
 typedef void flush_ret_t;
 typedef std::pair<Node, std::vector<Node>> data_ret_t;
 
+class BufferFlusher;
+
 /*
  * Quick and dirty buffer tree skeleton.
  * Metadata about buffers (buffer control blocks) will be stored in memory.
@@ -41,10 +43,6 @@ private:
   // number of nodes in the graph
   Node N;
 
-  // metadata control block(s)
-  // level 1 blocks take indices 0->(B-1). So on and so forth from there
-  std::vector<BufferControlBlock*> buffers;
-
   // buffers which we will use when performing flushes
   // we maintain these for every level of the tree 
   // to handle recursive flushing.
@@ -55,15 +53,10 @@ private:
   char **read_buffers;
 
   /*
-   * root node and functions for handling it
+   * Functions for flushing the roots of our subtrees and for the BufferFlushers to call
    */
-  char *root_node;
-  flush_ret_t flush_root();
-  flush_ret_t flush_control_block(BufferControlBlock *bcb, bool force=false);
   flush_ret_t flush_internal_node(BufferControlBlock *bcb);
   flush_ret_t flush_leaf_node(BufferControlBlock *bcb, bool force);
-  uint root_position;
-  std::mutex root_lock;
 
   /*
    * function which actually carries out the flush. Designed to be
@@ -82,6 +75,9 @@ private:
 
   // Circular queue in which we place leaves that fill up
   CircularQueue *cq;
+
+  // Buffer Flusher threads
+  BufferFlusher **flushers;
 
 public:
   /**
@@ -118,6 +114,8 @@ public:
    * @return nothing.
    */
   flush_ret_t force_flush();
+  flush_ret_t flush_subtree(buffer_id_t first_child);
+  flush_ret_t flush_control_block(BufferControlBlock *bcb, bool force=false);
 
   /*
    * Notifies all threads waiting on condition variables that 
@@ -166,6 +164,10 @@ public:
    * Creates the entire buffer tree to produce a tree of depth log_B(N)
    */
   void setup_tree();
+
+  // metadata control block(s)
+  // level 1 blocks take indices 0->(B-1). So on and so forth from there
+  std::vector<BufferControlBlock*> buffers;
 
   /*
    * Static variables which track universal information about the buffer tree which

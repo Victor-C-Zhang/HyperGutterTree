@@ -9,6 +9,9 @@
 #include <errno.h>
 #include <string.h>
 
+std::condition_variable BufferControlBlock::buffer_ready;
+std::mutex BufferControlBlock::buffer_ready_lock;
+
 BufferControlBlock::BufferControlBlock(buffer_id_t id, File_Pointer off, uint8_t level)
   : id(id), file_offset(off), level(level){
   storage_ptr = 0;
@@ -26,12 +29,6 @@ bool BufferControlBlock::write(char *data, uint32_t size) {
 	if(storage_ptr + size > BufferTree::buffer_size + BufferTree::page_size) {
 		printf("buffer %i too full write size %u\n", id, size);
 		throw BufferFullError(id);
-	}
-
-	if (level == 1) { // we cache the first level of the buffer tree
-		memcpy(BufferTree::cache + file_offset + storage_ptr, data, size);
-		storage_ptr += size;
-		return needs_flush(size);
 	}
 
 	int len = pwrite(BufferTree::backing_store, data, size, file_offset + storage_ptr);
