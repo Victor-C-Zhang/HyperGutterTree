@@ -42,7 +42,7 @@ void run_test(const int nodes, const int num_updates, const int buffer_size, con
   printf("Running Test: nodes=%i num_updates=%i buffer_size %i branch_factor %i\n",
          nodes, num_updates, buffer_size, branch_factor);
 
-  BufferTree *buf_tree = new BufferTree("./test_", buffer_size, branch_factor, nodes, 1, 8, true);
+  BufferTree *buf_tree = new BufferTree("./test_", buffer_size, branch_factor, nodes, 1, 1, 8, true);
   shutdown = false;
   upd_processed = 0;
   std::thread qworker(querier, buf_tree, nodes);
@@ -103,7 +103,7 @@ TEST(BasicInsert, EvilInsertions) {
   const int buf = MB;
   const int branch = 2;
 
-  BufferTree *buf_tree = new BufferTree("./test_", buf, branch, nodes, 1, 8, true);
+  BufferTree *buf_tree = new BufferTree("./test_", buf, branch, nodes, 1, 1, 8, true);
   shutdown = false;
   upd_processed = 0;
   std::thread qworker(querier, buf_tree, nodes);
@@ -138,15 +138,16 @@ TEST(BasicInsert, EvilInsertions) {
 }
 
 
-TEST(Parallelism, ManyQueryThreads) {
+TEST(Parallelism, ManyThreads) {
   const int nodes = 1024;
   const int num_updates = 5206;
   const int buf = MB;
-  const int branch = 2;
+  const int branch = 8;
 
   // here we limit the number of slots in the circular queue to 
   // create contention between the threads. (we pass 5,1 instead of 20,8)
-  BufferTree *buf_tree = new BufferTree("./test_", buf, branch, nodes, 5, 1, true);
+  // we also tell it to use a large number of flushers
+  BufferTree *buf_tree = new BufferTree("./test_", buf, branch, nodes, 5, 5, 1, true);
   shutdown = false;
   upd_processed = 0;
   std::thread query_threads[20];

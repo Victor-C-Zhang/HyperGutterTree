@@ -7,6 +7,7 @@
 #include <pthread.h>
 
 class BufferTree;
+class flush_struct;
 
 class BufferFlusher {
 public:
@@ -15,6 +16,9 @@ public:
 	static bool force_flush;
 	static std::queue<uint32_t> flush_queue;
 	static std::mutex queue_lock;
+
+	// memory for flushing
+  	flush_struct *flush_data;
 
 	BufferFlusher(uint32_t id, BufferTree *bt);
 	~BufferFlusher();

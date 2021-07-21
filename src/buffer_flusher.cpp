@@ -11,6 +11,9 @@ BufferFlusher::BufferFlusher(uint32_t id, BufferTree *bt)
  : id(id), bt(bt) {
  	shutdown    = false;
  	force_flush = false;
+
+ 	flush_data = new flush_struct();
+
  	pthread_create(&thr, NULL, BufferFlusher::start_flusher, this);
 }
 
@@ -18,9 +21,12 @@ BufferFlusher::~BufferFlusher() {
 	shutdown = true;
 	flush_ready.notify_all();
 	pthread_join(thr, NULL);
+
+	delete flush_data;
 }
 
 void BufferFlusher::do_work() {
+	printf("Starting BufferFlusher thread %i\n", id);
 	while(true) {
 		std::unique_lock<std::mutex> queue_unique(queue_lock);
 		flush_ready.wait(queue_unique, [this]{return (!flush_queue.empty() || shutdown);});
@@ -35,14 +41,13 @@ void BufferFlusher::do_work() {
 				exit(EXIT_FAILURE);
 			}
 
-			
 			if (force_flush) {
-				bt->flush_subtree(bcb_id);
+				bt->flush_subtree(*flush_data, bcb_id);
 			}
 			else {
 				BufferControlBlock *bcb = bt->buffers[bcb_id];
 				bcb->lock();
-				bt->flush_control_block(bcb);
+				bt->flush_control_block(*flush_data, bcb);
 				bcb->unlock();
 			}
 			BufferControlBlock::buffer_ready.notify_one();
