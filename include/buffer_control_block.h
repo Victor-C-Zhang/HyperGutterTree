@@ -22,8 +22,6 @@ typedef uint64_t File_Pointer;
 class BufferControlBlock {
 private:
   buffer_id_t id;
-  // busy lock
-  std::mutex mtx;
 
   // condition variable to determine if the buffer needs to be flushed
   // std::condition_variable needs_flushing;
@@ -46,7 +44,7 @@ public:
 
   // the index in the buffers array of this buffer's smallest child
   buffer_id_t first_child = 0;
-  uint8_t children_num = 0;     // and the number of children
+  uint16_t children_num = 0;     // and the number of children
 
   // information about what keys this node will store
   Node min_key;
@@ -59,26 +57,6 @@ public:
    * @param level the level in the tree this buffer resides at
    */
   BufferControlBlock(buffer_id_t id, File_Pointer off, uint8_t level);
-
-  /**
-   * Lock the buffer for data transfer. Blocks the calling context if the
-   * lock is unavailable.
-   */
-  void lock();
-
-  /**
-   * Unlocks the buffer once data transfer is complete. Throws an error if
-   * the buffer isn't locked.
-   * @throw BufferNotLockedError if the buffer isn't locked.
-   */
-  void unlock();
-
-  /**
-   * Atomic method to check if the buffer is "busy", i.e. flushing or being
-   * flushed to.
-   * @return true if the buffer is busy.
-   */
-  bool busy();
 
   /*
    * Write to the buffer managed by this metadata.

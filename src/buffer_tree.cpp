@@ -74,7 +74,7 @@ nodes, int workers, bool reset=false) : dir(dir), M(size), B(b), N(nodes) {
 
 	// create the circular queue in which we will place ripe fruit (full leaves)
 	// make space for full 2 * workers full updates
-	cq = new CircularQueue(2*workers, 2*leaf_size);
+	cq = new CircularQueue(2*workers, leaf_size + page_size);
 	
 	// will want to use mmap instead? - how much is in RAM after allocation (none?)
 	// can't use mmap instead might use it as well. (Still need to create the file to be a given size)
@@ -92,7 +92,7 @@ BufferTree::~BufferTree() {
 	for(int l = 0; l < max_level; l++) {
 		free(flush_positions[l]);
 		free(read_buffers[l]);
-		for (uint8_t i = 0; i < B; i++) {
+		for (uint16_t i = 0; i < B; i++) {
 			free(flush_buffers[l][i]);
 		}
 		free(flush_buffers[l]);
@@ -229,7 +229,7 @@ insert_ret_t BufferTree::insert(update_t upd) {
 /*
  * Helper function which determines which child we should flush to
  */
-inline uint32_t which_child(Node key, Node min_key, Node max_key, uint8_t options) {
+inline uint32_t which_child(Node key, Node min_key, Node max_key, uint16_t options) {
 	Node total = max_key - min_key + 1;
 	double div = (double)total / options;
 	uint32_t larger_kids = total % options;
@@ -253,7 +253,7 @@ inline uint32_t which_child(Node key, Node min_key, Node max_key, uint8_t option
  * at once otherwise the data will clash
  */
 flush_ret_t BufferTree::do_flush(char *data, uint32_t data_size, uint32_t begin, 
-	Node min_key, Node max_key, uint8_t options, uint8_t level) {
+	Node min_key, Node max_key, uint16_t options, uint8_t level) {
 	// setup
 	uint32_t full_flush = page_size - (page_size % serial_update_size);
 
@@ -369,8 +369,10 @@ bool BufferTree::get_data(data_ret_t &data) {
 	char *serial_data = elm.data;
 	uint32_t len      = elm.size;
 
-	if (len == 0)
+	if (len == 0) {
+		cq->pop(i);
 		return false; // we got no data so return not valid
+        }
 
 	data.second.clear(); // remove any old data from the vector
 	uint32_t vec_len  = len / serial_update_size;
@@ -419,6 +421,7 @@ void BufferTree::set_non_block(bool block) {
 	if (block) {
 		cq->no_block = true; // circular queue operations should no longer block
 		cq->cirq_empty.notify_all();
+		cq->cirq_full.notify_all();
 	}
 	else {
 		cq->no_block = false; // set circular queue to block if necessary

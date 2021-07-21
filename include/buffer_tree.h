@@ -76,7 +76,7 @@ private:
    * @returns nothing
    */
   flush_ret_t do_flush(char *data, uint32_t size, uint32_t begin, 
-    Node min_key, Node max_key, uint8_t options, uint8_t level);
+    Node min_key, Node max_key, uint16_t options, uint8_t level);
 
   // Circular queue in which we place leaves that fill up
   CircularQueue *cq;
