@@ -13,7 +13,7 @@
 
 typedef void insert_ret_t;
 typedef void flush_ret_t;
-typedef std::pair<Node_ID, std::vector<Node_ID>> data_ret_t;
+typedef std::pair<Node, std::vector<Node>> data_ret_t;
 
 /*
  * Quick and dirty buffer tree skeleton.

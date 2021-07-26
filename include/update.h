@@ -7,6 +7,7 @@
 
 #include <utility>
 typedef uint32_t Node_ID;
+typedef uint64_t Node;
 typedef std::pair<Node_ID, Node_ID> update_t;
 
 
