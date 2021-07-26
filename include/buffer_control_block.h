@@ -47,8 +47,8 @@ public:
   uint16_t children_num = 0;     // and the number of children
 
   // information about what keys this node will store
-  Node min_key;
-  Node max_key;
+  Node_ID min_key;
+  Node_ID max_key;
 
   /**
    * Generates metadata and file handle for a new buffer.
