@@ -123,19 +123,11 @@ void BufferTree::setup_tree() {
 	File_Pointer size = 0;
 
 	// create the BufferControlBlocks
-<<<<<<< HEAD
-	for (uint l = 1; l <= max_level; l++) { // loop through all levels
-		uint level_size    = pow(B, l); // number of blocks in this level
-		uint plevel_size   = pow(B, l-1);
-		uint start         = buffers.size();
-		Node_ID key        = 0;
-=======
 	for (uint32_t l = 1; l <= max_level; l++) { // loop through all levels
 		uint32_t level_size    = pow(B, l); // number of blocks in this level
 		uint32_t plevel_size   = pow(B, l-1);
 		uint32_t start         = buffers.size();
-		Node key           = 0;
->>>>>>> 41650ac421e09ffbd8c6df0fff4e2f9f16a0e2c8
+		Node_ID key            = 0;
 		double parent_keys = N;
 		uint32_t options       = B;
 		bool skip          = false;
@@ -240,15 +232,10 @@ insert_ret_t BufferTree::insert(update_t upd) {
 inline uint32_t which_child(Node_ID key, Node_ID min_key, Node_ID max_key, uint16_t options) {
 	Node_ID total = max_key - min_key + 1;
 	double div = (double)total / options;
-<<<<<<< HEAD
-	uint larger_kids = total % options;
-	uint larger_count = larger_kids * ceil(div);
-	Node_ID idx = key - min_key;
-=======
+
 	uint32_t larger_kids = total % options;
 	uint32_t larger_count = larger_kids * ceil(div);
-	Node idx = key - min_key;
->>>>>>> 41650ac421e09ffbd8c6df0fff4e2f9f16a0e2c8
+	Node_ID idx = key - min_key;
 
 	if (idx >= larger_count)
 		return ((idx - larger_count) / (int)div) + larger_kids;
