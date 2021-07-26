@@ -30,11 +30,10 @@ void BufferFlusher::do_work() {
 	while(true) {
 		std::unique_lock<std::mutex> queue_unique(queue_lock);
 		flush_ready.wait(queue_unique, [this]{return (!flush_queue.empty() || shutdown);});
-		// printf("BufferFlusher id=%i awoken... ", id);
 		if (!flush_queue.empty()) {
 			buffer_id_t bcb_id = flush_queue.front();
 			flush_queue.pop();
-			// printf("Processing buffer %u\n", bcb_id);
+			// printf("BufferFlusher id=%i awoken processing buffer %u\n", id, bcb_id);
 			queue_unique.unlock();
 			if (bcb_id >= bt->buffers.size()) {
 				fprintf(stderr, "ERROR: the id given in the flush_queue is too large! %u\n", bcb_id);
@@ -50,6 +49,7 @@ void BufferFlusher::do_work() {
 				bt->flush_control_block(*flush_data, bcb);
 				bcb->unlock();
 			}
+			// printf("BufferFlusher id=%i done\n", id);
 			BufferControlBlock::buffer_ready.notify_one();
 		} else if (shutdown) {
 			// printf("BufferFlusher %i shutting down\n", id);

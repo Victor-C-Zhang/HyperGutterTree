@@ -35,8 +35,8 @@ private:
   /*
    * Check if this buffer needs a flush. 
    * In the case of leaf nodes this returns true if the leaf has a new sketch sized buffer ready
-   * @param size  the size of the current write
-   * @return true if buffer needs a flush
+   * @param size   the size of the write
+   * @return       true if buffer needs a flush
    */
   bool needs_flush(uint32_t size);
 
@@ -74,6 +74,8 @@ public:
   // Other buffers should not require synchronization
   void lock() {buf_lock.lock();}
   void unlock() {buf_lock.unlock();}
+
+  void validate_write(char *data, uint32_t size);
 
   /*
    * Flush the buffer this block controls

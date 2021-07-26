@@ -53,7 +53,7 @@ private:
    * Functions for flushing the roots of our subtrees and for the BufferFlushers to call
    */
   flush_ret_t flush_internal_node(flush_struct &flush_from, BufferControlBlock *bcb);
-  flush_ret_t flush_leaf_node(flush_struct &flush_from, BufferControlBlock *bcb, bool force);
+  flush_ret_t flush_leaf_node(flush_struct &flush_from, BufferControlBlock *bcb);
 
   /*
    * function which actually carries out the flush. Designed to be
@@ -113,7 +113,7 @@ public:
    */
   flush_ret_t force_flush();
   flush_ret_t flush_subtree(flush_struct &flush_from, buffer_id_t first_child);
-  flush_ret_t flush_control_block(flush_struct &flush_from, BufferControlBlock *bcb, bool force=false);
+  flush_ret_t flush_control_block(flush_struct &flush_from, BufferControlBlock *bcb);
 
   /*
    * Notifies all threads waiting on condition variables that 

@@ -19,7 +19,7 @@ BufferControlBlock::BufferControlBlock(buffer_id_t id, File_Pointer off, uint8_t
 
 inline bool BufferControlBlock::needs_flush(uint32_t size) {
 	if(is_leaf())
-		return ((storage_ptr % BufferTree::leaf_size) < size) || (storage_ptr >= BufferTree::buffer_size);
+		return storage_ptr >= BufferTree::leaf_size && storage_ptr - size < BufferTree::leaf_size;
 	else
 		return storage_ptr >= BufferTree::buffer_size;
 }
@@ -27,7 +27,12 @@ inline bool BufferControlBlock::needs_flush(uint32_t size) {
 bool BufferControlBlock::write(char *data, uint32_t size) {
 	// printf("Writing to buffer %d data pointer = %p with size %i\n", id, data, size);
 	if(storage_ptr + size > BufferTree::buffer_size + BufferTree::page_size) {
-		printf("buffer %i too full write size %u\n", id, size);
+		printf("buffer %i too full write size %u  \n", id, size);
+		throw BufferFullError(id);
+	}
+	
+	if(is_leaf() && storage_ptr + size > BufferTree::leaf_size + BufferTree::page_size) {
+		printf("buffer %i too full write size %u storage_ptr = %lu, max = %lu\n", id, size, storage_ptr, BufferTree::leaf_size + BufferTree::page_size);
 		throw BufferFullError(id);
 	}
 
@@ -46,4 +51,22 @@ bool BufferControlBlock::write(char *data, uint32_t size) {
 
 	// return if this buffer should be added to the flush queue
 	return needs_flush(size);
+}
+
+// loop through everything we're being asked to write and verify that it falls within the
+// bounds of our min_key to max_key
+//
+// Used only when testing!
+void BufferControlBlock::validate_write(char *data, uint32_t size) {
+	char *data_start = data;
+	printf("Warning: Validating write should only be used for testing\n");
+
+	while(data - data_start < size) {
+		Node key = *((Node *) data);
+		if (key < min_key || key > max_key) {
+			printf("ERROR: incorrect key %lu --> ", key); print();
+			throw BufferFullError(id);
+		}
+		data += BufferTree::serial_update_size;
+	}
 }

@@ -149,7 +149,7 @@ void BufferTree::setup_tree() {
 			buffers.push_back(bcb);
 			index++; // seperate variable because sometimes we skip stuff
 			if(bcb->is_leaf())
-				size += (1 << 20) + page_size; // set to 1 MB
+				size += leaf_size + page_size; // leaves are of size == sketch
 			else 
 				size += buffer_size + page_size;
 		}
@@ -177,9 +177,8 @@ inline void BufferTree::serialize_update(char *dst, update_t src) {
 
 inline update_t BufferTree::deserialize_update(char *src) {
 	update_t dst;
-	memcpy(&dst.first, src, sizeof(Node));
-	memcpy(&dst.second, src + sizeof(Node), sizeof(Node));
-
+	dst.first  = *((uint64_t *) src);
+	dst.second = *((uint64_t *) (src + sizeof(Node)));
 	return dst;
 }
 
@@ -225,9 +224,6 @@ insert_ret_t BufferTree::insert(update_t upd) {
 	buffer_id_t r_id = which_child(key, 0, N-1, B); // TODO: Here we are assuming that N >= B
 	BufferControlBlock *root = buffers[r_id];
 	// printf("Insertion to buffer %i of size %llu\n", r_id, root->size());
-	
-	
-	
 
 	// perform the write and block if necessary
 	while (true) {
@@ -299,7 +295,7 @@ flush_ret_t BufferTree::do_flush(flush_struct &flush_from, uint32_t data_size, u
 
 		if (flush_pos[child] - flush_buf[child] >= full_flush) {
 			// write to our child, return value indicates if it needs to be flushed
-			uint size = flush_pos[child] - flush_buf[child];
+			uint32_t size = flush_pos[child] - flush_buf[child];
 			if(buffers[begin+child]->write(flush_buf[child], size)) {
 				flush_control_block(flush_from, buffers[begin+child]);
 			}
@@ -312,7 +308,7 @@ flush_ret_t BufferTree::do_flush(flush_struct &flush_from, uint32_t data_size, u
 	for (uint i = 0; i < B; i++) {
 		if (flush_pos[i] - flush_buf[i] > 0) {
 			// write to child i, return value indicates if it needs to be flushed
-			uint size = flush_pos[i] - flush_buf[i];
+			uint size = flush_pos[i] - flush_buf[i];	
 			if(buffers[begin+i]->write(flush_buf[i], size)) {
 				flush_control_block(flush_from, buffers[begin+i]);
 			}
@@ -320,14 +316,14 @@ flush_ret_t BufferTree::do_flush(flush_struct &flush_from, uint32_t data_size, u
 	}
 }
 
-flush_ret_t BufferTree::flush_control_block(flush_struct &flush_from, BufferControlBlock *bcb, bool force) {
+flush_ret_t BufferTree::flush_control_block(flush_struct &flush_from, BufferControlBlock *bcb) {
 	// printf("flushing "); bcb->print();
 	if(bcb->size() == 0) {
 		return; // don't flush empty control blocks
 	}
 
 	if (bcb->is_leaf()) {
-		return flush_leaf_node(flush_from, bcb, force);
+		return flush_leaf_node(flush_from, bcb);
 	}
 	return flush_internal_node(flush_from, bcb);
 }
@@ -356,11 +352,7 @@ flush_ret_t inline BufferTree::flush_internal_node(flush_struct &flush_from, Buf
 	bcb->set_size();
 }
 
-flush_ret_t inline BufferTree::flush_leaf_node(flush_struct &flush_from, BufferControlBlock *bcb, bool force) {
-	// first we need to establish if doing a write is best
-	if(cq->full() && bcb->size() < buffer_size && !force)
-		return; // don't do anything (use leaf as additional circular queue space)
-
+flush_ret_t inline BufferTree::flush_leaf_node(flush_struct &flush_from, BufferControlBlock *bcb) {
 	uint8_t level = bcb->level;
 	if (level == 0) {
 		flush_from.read_buffers[level] = cache + bcb->offset();
@@ -378,20 +370,10 @@ flush_ret_t inline BufferTree::flush_leaf_node(flush_struct &flush_from, BufferC
 		}
 	}
 
-	// printf("Trying to push leaf buffer (%i) of size %lu to cq\n", bcb->get_id(), bcb->size());
-	// empty this leaf into the circular queue
-	// until empty or cq is full
-	// do so back to front
-	while(bcb->size() > 0 && (!cq->full() || force || bcb->size() >= buffer_size)) {
-		File_Pointer begin_offset = (bcb->size() < leaf_size + page_size)? 0 : bcb->size() - leaf_size - page_size;
-
-		// printf("Pushing sketch %lu-%lu to the circular queue\n", begin_offset, bcb->size());
-		cq->push(flush_from.read_buffers[level] + begin_offset, bcb->size() - begin_offset); // add the data we read to the circular queue
+	cq->push(flush_from.read_buffers[level], bcb->size()); // add the data we read to the circular queue
 		
-		// reset the BufferControlBlock to the next leaf
-		bcb->set_size(begin_offset);
-		// printf("new bcb size = %lu\n", bcb->size());
-	}
+	// reset the BufferControlBlock
+	bcb->set_size();
 }
 
 // ask the buffer tree for data
@@ -434,6 +416,7 @@ bool BufferTree::get_data(data_ret_t &data) {
 		if (upd.first != key) {
 			// error to handle some weird unlikely buffer tree shenanigans
 			printf("ERROR: source node %lu and key %lu do not match in get_data()\n", upd.first, key);
+			printf("idx = %lu  len = %u\n", idx, len);
 			throw KeyIncorrectError();
 		}
 
@@ -460,7 +443,7 @@ flush_ret_t BufferTree::flush_subtree(flush_struct &flush_from, buffer_id_t firs
 			BufferControlBlock *cur = buffers[idx + first_child];
 			if (idx == 0) new_first_child = cur->first_child;
 			new_num_children += cur->children_num;
-			flush_control_block(flush_from, cur, true);
+			flush_control_block(flush_from, cur);
 		}
 		first_child  = new_first_child;
 		num_children = new_num_children;
@@ -487,7 +470,9 @@ flush_ret_t BufferTree::force_flush() {
 			buffer_id_t idx = BufferFlusher::flush_queue.front();
 			BufferFlusher::flush_queue.pop();
 			BufferFlusher::queue_lock.unlock();
+			// printf("main thread flushing buffer %u\n", idx);
 			flush_subtree(*flush_data, idx);
+			// printf("main thread done\n");
 		} else {
 			BufferFlusher::queue_lock.unlock();
 			break;

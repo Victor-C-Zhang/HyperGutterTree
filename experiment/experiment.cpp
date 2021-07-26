@@ -58,7 +58,7 @@ void run_test(const int nodes, const uint64_t num_updates, const uint64_t buffer
     printf("Running Test: nodes=%i num_updates=%lu buffer_size %lu branch_factor %i\n",
          nodes, num_updates, buffer_size, branch_factor);
 
-    BufferTree *buf_tree = new BufferTree("./test_", buffer_size, branch_factor, nodes, 2, threads, 16, true);
+    BufferTree *buf_tree = new BufferTree("experiment_", buffer_size, branch_factor, nodes, 1, threads, 16, true);
     shutdown = false;
     upd_processed = 0;
 
@@ -119,9 +119,9 @@ TEST(Experiment, ExtraLarge) {
 }
 
 TEST(SteadyState, HugeExperiment) {
-    const int nodes            = 250000;
-    const uint64_t num_updates = GB << 2; // 8 billion
-    const uint64_t buf         = MB;
+    const int nodes            = 262144;
+    const uint64_t num_updates = GB << 2; // 4 billion
+    const uint64_t buf         = MB << 3;
     const int branch           = 64;
     const int threads          = 10;
 
@@ -129,9 +129,9 @@ TEST(SteadyState, HugeExperiment) {
 }
 
 TEST(SteadyState, BigFanoutExperiment) {
-    const int nodes            = 250000;
-    const uint64_t num_updates = GB << 2; // 8 billion
-    const uint64_t buf         = MB;
+    const int nodes            = 262144;
+    const uint64_t num_updates = GB << 2; // 4 billion
+    const uint64_t buf         = MB << 3;
     const int branch           = 512;
     const int threads          = 10;
 

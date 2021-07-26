@@ -42,7 +42,7 @@ void run_test(const int nodes, const int num_updates, const int buffer_size, con
   printf("Running Test: nodes=%i num_updates=%i buffer_size %i branch_factor %i\n",
          nodes, num_updates, buffer_size, branch_factor);
 
-  BufferTree *buf_tree = new BufferTree("./test_", buffer_size, branch_factor, nodes, 1, 1, 8, true);
+  BufferTree *buf_tree = new BufferTree("./test_", buffer_size, branch_factor, nodes, 2, 1, 8, true);
   shutdown = false;
   upd_processed = 0;
   std::thread qworker(querier, buf_tree, nodes);
