@@ -169,7 +169,7 @@ public:
    * we would like to be accesible to all the bufferControlBlocks
    */
   static uint32_t page_size;
-  static const uint serial_update_size = sizeof(Node_ID) + sizeof(Node_ID);
+  static const uint32_t serial_update_size = sizeof(Node_ID) + sizeof(Node_ID);
   static uint8_t max_level;
   static uint32_t buffer_size;
   static uint64_t backing_EOF;
