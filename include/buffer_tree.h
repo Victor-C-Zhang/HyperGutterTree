@@ -39,7 +39,7 @@ private:
   uint32_t B;
 
   // number of nodes in the graph
-  Node N;
+  node_id_t N;
 
   // metadata control block(s)
   // level 1 blocks take indices 0->(B-1). So on and so forth from there
@@ -76,7 +76,7 @@ private:
    * @returns nothing
    */
   flush_ret_t do_flush(char *data, uint32_t size, uint32_t begin, 
-    Node min_key, Node max_key, uint16_t options, uint8_t level);
+    node_id_t min_key, node_id_t max_key, uint16_t options, uint8_t level);
 
   // Circular queue in which we place leaves that fill up
   CircularQueue *cq;
@@ -94,7 +94,7 @@ public:
    * @param workers the number of workers which will be using this buffer tree (defaults to 1)
    * @param reset   should truncate the file storage upon opening
    */
-  BufferTree(std::string dir, uint32_t size, uint32_t b, Node nodes, int workers, bool reset);
+  BufferTree(std::string dir, uint32_t size, uint32_t b, node_id_t nodes, int workers, bool reset);
   ~BufferTree();
   /**
    * Puts an update into the data structure.
@@ -157,7 +157,7 @@ public:
    * @param location data to pull from
    * @return the key pulled from the data
    */
-  static Node load_key(char *location);
+  static node_id_t load_key(char *location);
 
   /*
    * Creates the entire buffer tree to produce a tree of depth log_B(N)
@@ -169,7 +169,7 @@ public:
    * we would like to be accesible to all the bufferControlBlocks
    */
   static uint32_t page_size;
-  static const uint32_t serial_update_size = sizeof(Node) + sizeof(Node);
+  static const uint32_t serial_update_size = sizeof(node_id_t) + sizeof(node_id_t);
   static uint8_t max_level;
   static uint32_t buffer_size;
   static uint64_t backing_EOF;
