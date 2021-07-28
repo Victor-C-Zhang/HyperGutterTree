@@ -219,7 +219,7 @@ struct flush_struct {
     for (int l = 0; l < BufferTree::max_level; l++) {
       flush_buffers[l]   = (char **) malloc(sizeof(char *) * BufferTree::branch_factor);
       flush_positions[l] = (char **) malloc(sizeof(char *) * BufferTree::branch_factor);
-      if (l > 0) read_buffers[l] = (char *) malloc(sizeof(char) * (BufferTree::buffer_size + BufferTree::page_size));
+      read_buffers[l]    = (char *) malloc(sizeof(char) * (BufferTree::buffer_size + BufferTree::page_size));
       for (uint i = 0; i < BufferTree::branch_factor; i++) {
         flush_buffers[l][i] = (char *) calloc(BufferTree::page_size, sizeof(char));
       }
@@ -229,7 +229,7 @@ struct flush_struct {
   ~flush_struct() {
     for(int l = 0; l < BufferTree::max_level; l++) {
       free(flush_positions[l]);
-      if (l > 0) free(read_buffers[l]);
+      free(read_buffers[l]);
       for (uint16_t i = 0; i < BufferTree::branch_factor; i++) {
         free(flush_buffers[l][i]);
       }

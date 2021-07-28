@@ -40,7 +40,8 @@ private:
    */
   bool needs_flush(uint32_t size);
 
-  std::mutex buf_lock;
+  // lock for controlling read/write access to the buffer
+  std::mutex RW_lock;
 
 public:
   // this node's level in the tree. 0 is root, 1 is it's children, etc
@@ -72,8 +73,8 @@ public:
 
   // synchronization functions. Should be called when root buffers are read or written to.
   // Other buffers should not require synchronization
-  void lock() {buf_lock.lock();}
-  void unlock() {buf_lock.unlock();}
+  void lock() {RW_lock.lock();}
+  void unlock() {RW_lock.unlock();}
 
   void validate_write(char *data, uint32_t size);
 

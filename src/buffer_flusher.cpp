@@ -46,8 +46,7 @@ void BufferFlusher::do_work() {
 			else {
 				BufferControlBlock *bcb = bt->buffers[bcb_id];
 				bcb->lock();
-				bt->flush_control_block(*flush_data, bcb);
-				bcb->unlock();
+				bt->flush_control_block(*flush_data, bcb); // flush and unlock the bcb
 			}
 			// printf("BufferFlusher id=%i done\n", id);
 			BufferControlBlock::buffer_ready.notify_one();

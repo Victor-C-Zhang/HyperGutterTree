@@ -335,49 +335,61 @@ flush_ret_t BufferTree::flush_control_block(flush_struct &flush_from, BufferCont
 flush_ret_t inline BufferTree::flush_internal_node(flush_struct &flush_from, BufferControlBlock *bcb) {
 	uint8_t level = bcb->level;
 	if (level == 0) { // we have this in cache
-		flush_from.read_buffers[level] = cache + bcb->offset();
-	} else {
-		uint32_t data_to_read = bcb->size();
-		uint32_t offset = 0;
-		while(data_to_read > 0) {
-			int len = pread(backing_store, flush_from.read_buffers[level] + offset, data_to_read, bcb->offset() + offset);
-			if (len == -1) {
-				printf("ERROR flush failed to read from buffer %i, %s\n", bcb->get_id(), strerror(errno));
-				exit(EXIT_FAILURE);
-			}
-			data_to_read -= len;
-			offset += len;
+		uint32_t data_size = bcb->size();
+		memcpy(flush_from.read_buffers[level], cache+bcb->offset(), data_size); // move the data over
+		bcb->set_size(); // data is copied out so no need to save it
+		bcb->unlock();
+
+		// now do_flush which doesn't require locking the top buffer! yay!
+		do_flush(flush_from, data_size, bcb->first_child, bcb->min_key, bcb->max_key, bcb->children_num, bcb->level);
+		return;
+	} 
+
+	// sub level 0 flush
+	bcb->lock(); // for these sub-level buffers we lock them the entire time they're being flushed
+	uint32_t data_to_read = bcb->size();
+	uint32_t offset = 0;
+	while(data_to_read > 0) {
+		int len = pread(backing_store, flush_from.read_buffers[level] + offset, data_to_read, bcb->offset() + offset);
+		if (len == -1) {
+			printf("ERROR flush failed to read from buffer %i, %s\n", bcb->get_id(), strerror(errno));
+			exit(EXIT_FAILURE);
 		}
+		data_to_read -= len;
+		offset += len;
 	}
-
-	// printf("read %lu bytes\n", len);
-
 	do_flush(flush_from, bcb->size(), bcb->first_child, bcb->min_key, bcb->max_key, bcb->children_num, bcb->level);
-	bcb->set_size();
+	bcb->set_size(); // set size if sub level 0 flush
+	bcb->unlock();
 }
 
 flush_ret_t inline BufferTree::flush_leaf_node(flush_struct &flush_from, BufferControlBlock *bcb) {
 	uint8_t level = bcb->level;
 	if (level == 0) {
-		flush_from.read_buffers[level] = cache + bcb->offset();
-	} else {
-		uint32_t data_to_read = bcb->size();
-		uint32_t offset = 0;
-		while(data_to_read > 0) {
-			int len = pread(backing_store, flush_from.read_buffers[level] + offset, data_to_read, bcb->offset() + offset);
-			if (len == -1) {
-				printf("ERROR flush failed to read from buffer %i, %s\n", bcb->get_id(), strerror(errno));
-				exit(EXIT_FAILURE);
-			}
-			data_to_read -= len;
-			offset += len;
-		}
+		cq->push(cache + bcb->offset(), bcb->size());
+		bcb->set_size();
+		bcb->unlock();
+		return;
 	}
 
+	// sub level flush
+	bcb->lock(); // for these sub-level buffers we lock them the entire time they're being flushed
+	uint32_t data_to_read = bcb->size();
+	uint32_t offset = 0;
+	while(data_to_read > 0) {
+		int len = pread(backing_store, flush_from.read_buffers[level] + offset, data_to_read, bcb->offset() + offset);
+		if (len == -1) {
+			printf("ERROR flush failed to read from buffer %i, %s\n", bcb->get_id(), strerror(errno));
+			exit(EXIT_FAILURE);
+		}
+		data_to_read -= len;
+		offset += len;
+	}
 	cq->push(flush_from.read_buffers[level], bcb->size()); // add the data we read to the circular queue
 		
 	// reset the BufferControlBlock
 	bcb->set_size();
+	bcb->unlock();
 }
 
 // ask the buffer tree for data
