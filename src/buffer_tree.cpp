@@ -10,7 +10,7 @@
 /*
  * Static "global" BufferTree variables
  */
-uint     BufferTree::page_size;
+uint32_t BufferTree::page_size;
 uint8_t  BufferTree::max_level;
 uint32_t BufferTree::buffer_size;
 uint32_t BufferTree::branch_factor;
@@ -25,10 +25,11 @@ char *   BufferTree::cache;
  * and the number of nodes we will insert(N)
  * We assume that node indices begin at 0 and increase to N-1
  */
-BufferTree::BufferTree(std::string dir, uint32_t size, uint32_t b, Node
+BufferTree::BufferTree(std::string dir, uint32_t size, uint32_t b, node_id_t
 nodes, int nf, int workers, int queue_factor, bool reset=false) : dir(dir), M(size), B(b), N(nodes), num_flushers(nf) {
 	page_size = 5 * sysconf(_SC_PAGE_SIZE); // works on POSIX systems (alternative is boost)
 	page_size = (page_size % serial_update_size == 0)? page_size : page_size + serial_update_size - page_size % serial_update_size;
+
 	int file_flags = O_RDWR | O_CREAT; // direct memory O_DIRECT may or may not be good
 	if (reset) {
 		file_flags |= O_TRUNC;
@@ -83,9 +84,9 @@ BufferTree::~BufferTree() {
 	// force_flush(); // flush everything to leaves (could just flush to files in higher levels)
 
 	// free malloc'd memory
-	delete(flush_data);
+	delete flush_data;
 	free(cache);
-	for(uint i = 0; i < buffers.size(); i++) {
+	for(uint32_t i = 0; i < buffers.size(); i++) {
 		if (buffers[i] != nullptr)
 			delete buffers[i];
 	}
@@ -97,7 +98,7 @@ BufferTree::~BufferTree() {
 }
 
 void print_tree(std::vector<BufferControlBlock *>bcb_list) {
-	for(uint i = 0; i < bcb_list.size(); i++) {
+	for(uint32_t i = 0; i < bcb_list.size(); i++) {
 		if (bcb_list[i] != nullptr) 
 			bcb_list[i]->print();
 	}
@@ -109,21 +110,22 @@ void BufferTree::setup_tree() {
 	File_Pointer size = 0;
 
 	// create the BufferControlBlocks
-	for (uint l = 0; l < max_level; l++) { // loop through all levels
+	for (uint32_t l = 0; l < max_level; l++) { // loop through all levels
 		if(l == 1) size = 0; // reset the size because the first level is held in cache
 
-		uint level_size    = pow(B, l+1); // number of blocks in this level
-		uint plevel_size   = pow(B, l);
-		uint start         = buffers.size();
-		Node key           = 0;
+		uint32_t level_size    = pow(B, l+1); // number of blocks in this level
+		uint32_t plevel_size   = pow(B, l);
+		uint32_t start         = buffers.size();
+		node_id_t key          = 0;
+
 		double parent_keys = N;
-		uint options       = B;
+		uint32_t options       = B;
 		bool skip          = false;
-		uint parent        = 0;
+		uint32_t parent        = 0;
 		File_Pointer index = 0;
 
 		buffers.reserve(start + level_size);
-		for (uint i = 0; i < level_size; i++) { // loop through all blocks in the level
+		for (uint32_t i = 0; i < level_size; i++) { // loop through all blocks in the level
 			// get the parent of this node if not level 1 and if we have a new parent
 			if (l > 0 && (i-start) % B == 0) {
 				parent      = start + i/B - plevel_size; // this logic should check out because only the last level is ever not full
@@ -168,17 +170,18 @@ void BufferTree::setup_tree() {
 
 // serialize an update to a data location (should only be used for root I think)
 inline void BufferTree::serialize_update(char *dst, update_t src) {
-	Node node1 = src.first;
-	Node node2 = src.second;
+	node_id_t node1 = src.first;
+	node_id_t node2 = src.second;
 
-	memcpy(dst, &node1, sizeof(Node));
-	memcpy(dst + sizeof(Node), &node2, sizeof(Node));
+	memcpy(dst, &node1, sizeof(node_id_t));
+	memcpy(dst + sizeof(node_id_t), &node2, sizeof(node_id_t));
 }
 
 inline update_t BufferTree::deserialize_update(char *src) {
 	update_t dst;
-	dst.first  = *((uint64_t *) src);
-	dst.second = *((uint64_t *) (src + sizeof(Node)));
+	dst.first  = *((node_id_t *) src);
+	dst.second = *((node_id_t *) (src + sizeof(node_id_t)));
+
 	return dst;
 }
 
@@ -190,21 +193,22 @@ inline void BufferTree::copy_serial(char *src, char *dst) {
 /*
  * Load a key from a given location
  */
-inline Node BufferTree::load_key(char *location) {
-	Node key;
-	memcpy(&key, location, sizeof(Node));
+inline node_id_t BufferTree::load_key(char *location) {
+	node_id_t key;
+	memcpy(&key, location, sizeof(node_id_t));
 	return key;
 }
 
 /*
  * Helper function which determines which child we should flush to
  */
-inline uint32_t which_child(Node key, Node min_key, Node max_key, uint16_t options) {
-	Node total = max_key - min_key + 1;
+inline uint32_t which_child(node_id_t key, node_id_t min_key, node_id_t max_key, uint16_t options) {
+	node_id_t total = max_key - min_key + 1;
 	double div = (double)total / options;
-	uint larger_kids = total % options;
-	uint larger_count = larger_kids * ceil(div);
-	Node idx = key - min_key;
+
+	uint32_t larger_kids = total % options;
+	uint32_t larger_count = larger_kids * ceil(div);
+	node_id_t idx = key - min_key;
 
 	if (idx >= larger_count)
 		return ((idx - larger_count) / (int)div) + larger_kids;
@@ -262,7 +266,7 @@ insert_ret_t BufferTree::insert(update_t upd) {
  * at once otherwise the data will clash
  */
 flush_ret_t BufferTree::do_flush(flush_struct &flush_from, uint32_t data_size, uint32_t begin, 
-	Node min_key, Node max_key, uint16_t options, uint8_t level) {
+	node_id_t min_key, node_id_t max_key, uint16_t options, uint8_t level) {
 	// setup
 	uint32_t full_flush = page_size - (page_size % serial_update_size);
 
@@ -271,21 +275,21 @@ flush_ret_t BufferTree::do_flush(flush_struct &flush_from, uint32_t data_size, u
 
 	char *data_start = flush_from.read_buffers[level];
 	char *data       = data_start;
-	for (uint i = 0; i < B; i++) {
+	for (uint32_t i = 0; i < B; i++) {
 		flush_pos[i] = flush_buf[i];
 	}
 
 	while (data - data_start < data_size) {
-		Node key = load_key(data);
+		node_id_t key = load_key(data);
 		uint32_t child  = which_child(key, min_key, max_key, options);
 		if (child > B - 1) {
-			printf("ERROR: incorrect child %u abandoning insert key=%lu min=%lu max=%lu\n", child, key, min_key, max_key);
+			printf("ERROR: incorrect child %u abandoning insert key=%u min=%u max=%u\n", child, key, min_key, max_key);
 			printf("first child = %u\n", buffers[begin]->get_id());
 			printf("data pointer = %lu data_start=%lu data_size=%u\n", (uint64_t) data, (uint64_t) data_start, data_size);
 			throw KeyIncorrectError();
 		}
 		if (buffers[child+begin]->min_key > key || buffers[child+begin]->max_key < key) {
-			printf("ERROR: bad key %lu for child %u, child min = %lu, max = %lu\n", 
+			printf("ERROR: bad key %u for child %u, child min = %u, max = %u\n", 
 				key, child, buffers[child+begin]->min_key, buffers[child+begin]->max_key);
 			throw KeyIncorrectError();
 		}
@@ -305,10 +309,10 @@ flush_ret_t BufferTree::do_flush(flush_struct &flush_from, uint32_t data_size, u
 	}
 
 	// loop through the flush buffers and write out any non-empty ones
-	for (uint i = 0; i < B; i++) {
+	for (uint32_t i = 0; i < B; i++) {
 		if (flush_pos[i] - flush_buf[i] > 0) {
 			// write to child i, return value indicates if it needs to be flushed
-			uint size = flush_pos[i] - flush_buf[i];	
+			uint32_t size = flush_pos[i] - flush_buf[i];
 			if(buffers[begin+i]->write(flush_buf[i], size)) {
 				flush_control_block(flush_from, buffers[begin+i]);
 			}
@@ -403,7 +407,7 @@ bool BufferTree::get_data(data_ret_t &data) {
 	data.second.reserve(vec_len); // reserve space for our updates
 
 	// assume the first key is correct so extract it
-	Node key = load_key(serial_data);
+	node_id_t key = load_key(serial_data);
 	data.first = key;
 
 	while(idx < (uint64_t) len) {
@@ -415,7 +419,7 @@ bool BufferTree::get_data(data_ret_t &data) {
 
 		if (upd.first != key) {
 			// error to handle some weird unlikely buffer tree shenanigans
-			printf("ERROR: source node %lu and key %lu do not match in get_data()\n", upd.first, key);
+			printf("source node %u and key %u do not match in get_data()\n", upd.first, key);
 			printf("idx = %lu  len = %u\n", idx, len);
 			throw KeyIncorrectError();
 		}

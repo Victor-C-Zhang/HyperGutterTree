@@ -51,8 +51,8 @@ public:
   uint16_t children_num = 0;     // and the number of children
 
   // information about what keys this node will store
-  Node min_key;
-  Node max_key;
+  node_id_t min_key;
+  node_id_t max_key;
 
   /**
    * Generates metadata and file handle for a new buffer.
@@ -95,8 +95,8 @@ public:
   }
 
   inline void print() {
-    printf("buffer %u: level = %u, storage_ptr = %lu, offset = %lu, min_key=%lu, max_key=%lu, first_child=%u, #children=%u\n", 
-      id, level, storage_ptr, file_offset, min_key, max_key, first_child, children_num);
+    printf("buffer %u: storage_ptr = %lu, offset = %lu, min_key=%u, max_key=%u, first_child=%u, #children=%u\n", 
+      id, storage_ptr, file_offset, min_key, max_key, first_child, children_num);
   }
 
   static std::condition_variable buffer_ready;
