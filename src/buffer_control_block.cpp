@@ -36,6 +36,7 @@ bool BufferControlBlock::write(char *data, uint32_t size) {
 		throw BufferFullError(id);
 	}
 
+	lock();
 	int len = pwrite(BufferTree::backing_store, data, size, file_offset + storage_ptr);
 	int w = 0;
 	while(len < (int32_t)size) {
@@ -48,9 +49,11 @@ bool BufferControlBlock::write(char *data, uint32_t size) {
 		len = pwrite(BufferTree::backing_store, data + w, size, file_offset + storage_ptr + w);
 	}
 	storage_ptr += size;
+	bool ret_flush = needs_flush(size);
+	unlock();
 
 	// return if this buffer should be added to the flush queue
-	return needs_flush(size);
+	return ret_flush;
 }
 
 // loop through everything we're being asked to write and verify that it falls within the
