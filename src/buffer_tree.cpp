@@ -3,6 +3,7 @@
 #include <utility>
 #include <unistd.h> //sysconf
 #include <string.h> //memcpy
+#include <stdexcept> // to throw exception on Windows TODO: remove
 #include <fcntl.h>  //posix_fallocate
 #include <errno.h>
 
@@ -25,7 +26,9 @@ int      BufferTree::backing_store;
  */
 BufferTree::BufferTree(std::string dir, uint32_t size, uint32_t b, node_id_t
 nodes, int workers, bool reset=false) : dir(dir), M(size), B(b), N(nodes) {
-	page_size = sysconf(_SC_PAGE_SIZE); // works on POSIX systems (alternative is boost)
+	page_size = sysconf(_SC_PAGESIZE); // works on POSIX systems (alternative is boost)
+	// Windows may need https://docs.microsoft.com/en-us/windows/win32/api/sysinfoapi/nf-sysinfoapi-getnativesysteminfo?redirectedfrom=MSDN
+
 	int file_flags = O_RDWR | O_CREAT; // direct memory O_DIRECT may or may not be good
 	if (reset) {
 		file_flags |= O_TRUNC;
@@ -167,15 +170,28 @@ void BufferTree::setup_tree() {
 		}
 	}
 
-    // allocate file space for all the nodes to prevent fragmentation
-    #ifdef HAVE_FALLOCATE
+	// allocate file space for all the nodes to prevent fragmentation
+	#ifdef LINUX_FALLOCATE
 	fallocate(backing_store, 0, 0, size); // linux only but fast
-	#else
-	posix_fallocate(backing_store, 0, size); // portable but much slower
-    #endif
-    
-    backing_EOF = size;
-    // print_tree(buffers);
+  #endif
+  #ifdef WINDOWS_FILEAPI
+  // https://stackoverflow.com/questions/455297/creating-big-file-on-windows/455302#455302
+  // implement the above
+  throw std::runtime_error("Windows is not currently supported by FastBufferTree");
+  #endif
+  #ifdef POSIX_FCNTL
+    // taken from https://github.com/trbs/fallocate
+    fstore_t store_options = {
+        F_ALLOCATECONTIG,
+        F_PEOFPOSMODE,
+        0,
+        static_cast<off_t>(size),
+        0
+    };
+    fcntl(backing_store, F_PREALLOCATE, &store_options);
+  #endif
+	backing_EOF = size;
+	// print_tree(buffers);
 }
 
 // serialize an update to a data location (should only be used for root I think)
