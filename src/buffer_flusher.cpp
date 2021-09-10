@@ -28,9 +28,11 @@ BufferFlusher::~BufferFlusher() {
 void BufferFlusher::do_work() {
 	printf("Starting BufferFlusher thread %i\n", id);
 	while(true) {
+		working = false;
 		std::unique_lock<std::mutex> queue_unique(queue_lock);
 		flush_ready.wait(queue_unique, [this]{return (!flush_queue.empty() || shutdown);});
 		if (!flush_queue.empty()) {
+			working = true;
 			buffer_id_t bcb_id = flush_queue.front();
 			flush_queue.pop();
 			// printf("BufferFlusher id=%i awoken processing buffer %u\n", id, bcb_id);
@@ -47,6 +49,7 @@ void BufferFlusher::do_work() {
 				BufferControlBlock *bcb = bt->buffers[bcb_id];
 				bcb->lock();
 				bt->flush_control_block(*flush_data, bcb); // flush and unlock the bcb
+				bcb->unlock();
 			}
 			// printf("BufferFlusher id=%i done\n", id);
 			BufferControlBlock::buffer_ready.notify_one();

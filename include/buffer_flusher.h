@@ -23,6 +23,8 @@ public:
 	BufferFlusher(uint32_t id, BufferTree *bt);
 	~BufferFlusher();
 
+	inline bool get_working() {return working;}
+
 private:
 	static void *start_flusher(void *obj) {
 		((BufferFlusher *)obj)->do_work();
@@ -32,6 +34,7 @@ private:
 	uint32_t id;
 	BufferTree *bt;
 	pthread_t thr;
+	bool working = false; // is this thread actively working on something
 
 	void do_work();
 };

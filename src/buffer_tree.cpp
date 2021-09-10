@@ -92,6 +92,10 @@ BufferTree::~BufferTree() {
 	}
 	delete cq;
 
+
+	for(int i = 0; i < num_flushers; i++) {
+		delete flushers[i];
+	}
 	free(flushers);
 
 	close(backing_store);
@@ -338,7 +342,6 @@ flush_ret_t inline BufferTree::flush_internal_node(flush_struct &flush_from, Buf
 		uint32_t data_size = bcb->size();
 		memcpy(flush_from.read_buffers[level], cache+bcb->offset(), data_size); // move the data over
 		bcb->set_size(); // data is copied out so no need to save it
-		bcb->unlock();
 
 		// now do_flush which doesn't require locking the top buffer! yay!
 		do_flush(flush_from, data_size, bcb->first_child, bcb->min_key, bcb->max_key, bcb->children_num, bcb->level);
@@ -346,7 +349,7 @@ flush_ret_t inline BufferTree::flush_internal_node(flush_struct &flush_from, Buf
 	} 
 
 	// sub level 0 flush
-	bcb->lock(); // for these sub-level buffers we lock them the entire time they're being flushed
+	// bcb->lock(); // for these sub-level buffers we lock them the entire time they're being flushed
 	uint32_t data_to_read = bcb->size();
 	uint32_t offset = 0;
 	while(data_to_read > 0) {
@@ -360,7 +363,7 @@ flush_ret_t inline BufferTree::flush_internal_node(flush_struct &flush_from, Buf
 	}
 	do_flush(flush_from, bcb->size(), bcb->first_child, bcb->min_key, bcb->max_key, bcb->children_num, bcb->level);
 	bcb->set_size(); // set size if sub level 0 flush
-	bcb->unlock();
+	// bcb->unlock();
 }
 
 flush_ret_t inline BufferTree::flush_leaf_node(flush_struct &flush_from, BufferControlBlock *bcb) {
@@ -495,11 +498,15 @@ flush_ret_t BufferTree::force_flush() {
 		}
 	}
 
-	// Here we delete the buffer flushers to assert that they are done with their work
-	// TODO: make the number of buffer flushers a parameter
-	for(int i = 0; i < num_flushers; i++) {
-		delete flushers[i];
-	}
+	// wait for every worker to be done working
+	std::unique_lock<std::mutex> lk(BufferControlBlock::buffer_ready_lock);
+	BufferControlBlock::buffer_ready.wait_for(lk, std::chrono::milliseconds(200),
+	[this]{
+		for (int i = 0; i < num_flushers; i++)
+			if (flushers[i]->get_working()) return false;
+		return true;
+	});
+	lk.unlock();
 }
 
 void BufferTree::set_non_block(bool block) {
