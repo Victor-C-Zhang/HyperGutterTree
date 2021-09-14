@@ -1,6 +1,4 @@
-#ifndef QUEUE_GUARD
-#define QUEUE_GUARD
-
+#pragma once
 #include <condition_variable>
 #include <mutex>
 #include <utility>
@@ -85,4 +83,3 @@ public:
     return "Write to circular queue is too big";
   }
 };
-#endif

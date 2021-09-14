@@ -1,11 +1,4 @@
-//
-// Created by victor on 3/2/21.
-//
-
-#ifndef FASTBUFFERTREE_BUFFER_CONTROL_BLOCK_H
-#define FASTBUFFERTREE_BUFFER_CONTROL_BLOCK_H
-
-
+#pragma once
 #include <cstdint>
 #include <string>
 #include <mutex>
@@ -100,5 +93,3 @@ public:
     return temp.c_str();
   }
 };
-
-#endif //FASTBUFFERTREE_BUFFER_CONTROL_BLOCK_H
