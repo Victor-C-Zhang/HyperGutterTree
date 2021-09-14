@@ -1,6 +1,4 @@
-#ifndef FASTBUFFERTREE_BUFFER_TREE_H
-#define FASTBUFFERTREE_BUFFER_TREE_H
-
+#pragma once
 #include <cstdint>
 #include <string>
 #include <vector>
@@ -199,6 +197,3 @@ public:
     return "The key was not correct for the associated buffer";
   }
 };
-
-
-#endif //FASTBUFFERTREE_BUFFER_TREE_H
