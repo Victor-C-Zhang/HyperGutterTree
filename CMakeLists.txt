@@ -1,4 +1,6 @@
-cmake_minimum_required(VERSION 3.5)
+cmake_minimum_required(VERSION 3.15)
+include(ExternalProject)
+
 project(FastBufferTree)
 
 set(CMAKE_CXX_STANDARD 11)
@@ -62,6 +64,26 @@ if(NOT GTest_FOUND)
   endif()
 endif()
 
+# Include common components
+ExternalProject_Add(
+  GraphZeppelinCommon
+
+  PREFIX          GraphZeppelinCommon
+  GIT_REPOSITORY  "https://github.com/Victor-C-Zhang/GraphZeppelinCommon.git"
+  GIT_TAG         "main"
+
+  BUILD_ALWAYS    ON
+  INSTALL_DIR     ${CMAKE_CURRENT_BINARY_DIR}/GraphZeppelinCommon/prefix
+
+  CMAKE_CACHE_ARGS
+        -DAUTODOWNLOAD:BOOL=ON
+        -DCMAKE_INSTALL_PREFIX:PATH=<INSTALL_DIR>
+
+  BUILD_COMMAND ${CMAKE_COMMAND} --build <BINARY_DIR> --target install
+)
+
+include_directories(${CMAKE_CURRENT_BINARY_DIR}/GraphZeppelinCommon/prefix/include)
+
 add_library(FastBufferTree
     src/buffer_tree.cpp
     include/buffer_tree.h
@@ -101,6 +123,7 @@ add_executable(buffertree_tests
   test/runner.cpp
   test/basic_test.cpp)
 target_link_libraries(buffertree_tests PRIVATE GTest::gtest FastBufferTree)
+add_dependencies(buffertree_tests GraphZeppelinCommon)
 # optimize unless debug
 if (DEFINED ENV{DEBUG})
   message("Disabling optimizations and enabling debug symbols")

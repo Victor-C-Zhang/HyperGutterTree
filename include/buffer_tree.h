@@ -5,13 +5,14 @@
 #include <queue>
 #include <mutex>
 #include <math.h>
+#include <graph_zeppelin_common.h>
 #include "update.h"
 #include "buffer_control_block.h"
 #include "circular_queue.h"
 
 typedef void insert_ret_t;
 typedef void flush_ret_t;
-typedef std::pair<Node, std::vector<Node>> data_ret_t;
+typedef std::pair<node_t, std::vector<node_t>> data_ret_t;
 
 /*
  * Quick and dirty buffer tree skeleton.
