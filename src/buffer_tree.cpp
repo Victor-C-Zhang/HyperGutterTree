@@ -510,7 +510,7 @@ flush_ret_t BufferTree::force_flush() {
 	
 	for (BufferControlBlock *bcb : buffers) {
 		if (bcb != nullptr) {
-			flush_control_block(bcb, true);
+			flush_control_block(bcb);
 		}
 	}
 }
