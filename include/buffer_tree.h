@@ -1,6 +1,4 @@
-#ifndef FASTBUFFERTREE_BUFFER_TREE_H
-#define FASTBUFFERTREE_BUFFER_TREE_H
-
+#pragma once
 #include <cstdint>
 #include <string>
 #include <vector>
@@ -41,9 +39,9 @@ private:
    */
   char *root_node;
   flush_ret_t flush_root();
-  flush_ret_t flush_control_block(BufferControlBlock *bcb, bool force=false);
+  flush_ret_t flush_control_block(BufferControlBlock *bcb);
   flush_ret_t flush_internal_node(BufferControlBlock *bcb);
-  flush_ret_t flush_leaf_node(BufferControlBlock *bcb, bool force);
+  flush_ret_t flush_leaf_node(BufferControlBlock *bcb);
   uint root_position;
   std::mutex root_lock;
 
@@ -60,7 +58,7 @@ private:
    * @returns nothing
    */
   flush_ret_t do_flush(char *data, uint32_t size, uint32_t begin, 
-    Node min_key, Node max_key, uint16_t options, uint8_t level);
+    node_id_t min_key, node_id_t max_key, uint16_t options, uint8_t level);
 
   // Circular queue in which we place leaves that fill up
   CircularQueue *cq;
@@ -148,7 +146,7 @@ public:
    * @param location data to pull from
    * @return the key pulled from the data
    */
-  static Node load_key(char *location);
+  static node_id_t load_key(char *location);
 
   /*
    * Creates the entire buffer tree to produce a tree of depth log_B(N)
@@ -159,8 +157,8 @@ public:
    * Static variables which track universal information about the buffer tree which
    * we would like to be accesible to all the bufferControlBlocks
    */
-  static uint page_size;
-  static const uint serial_update_size = sizeof(Node) + sizeof(Node);
+  static uint32_t page_size;
+  static const uint32_t serial_update_size = sizeof(node_id_t) + sizeof(node_id_t);
   static uint8_t max_level;
   static uint32_t buffer_size;
   static uint32_t fanout;
@@ -196,6 +194,3 @@ public:
     return "The key was not correct for the associated buffer";
   }
 };
-
-
-#endif //FASTBUFFERTREE_BUFFER_TREE_H

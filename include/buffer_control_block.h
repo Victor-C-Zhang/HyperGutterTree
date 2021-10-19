@@ -1,11 +1,4 @@
-//
-// Created by victor on 3/2/21.
-//
-
-#ifndef FASTBUFFERTREE_BUFFER_CONTROL_BLOCK_H
-#define FASTBUFFERTREE_BUFFER_CONTROL_BLOCK_H
-
-
+#pragma once
 #include <cstdint>
 #include <string>
 #include <mutex>
@@ -49,8 +42,8 @@ public:
   uint16_t children_num = 0;     // and the number of children
 
   // information about what keys this node will store
-  Node min_key;
-  Node max_key;
+  node_id_t min_key;
+  node_id_t max_key;
 
   /**
    * Generates metadata and file handle for a new buffer.
@@ -86,7 +79,7 @@ public:
   }
 
   inline void print() {
-    printf("buffer %u: storage_ptr = %lu, offset = %lu, min_key=%lu, max_key=%lu, first_child=%u, #children=%u\n", 
+    printf("buffer %u: storage_ptr = %lu, offset = %lu, min_key=%u, max_key=%u, first_child=%u, #children=%u\n", 
       id, storage_ptr, file_offset, min_key, max_key, first_child, children_num);
   }
 };
@@ -102,5 +95,3 @@ public:
     return temp.c_str();
   }
 };
-
-#endif //FASTBUFFERTREE_BUFFER_CONTROL_BLOCK_H

@@ -1,5 +1,4 @@
 #include <gtest/gtest.h>
-#include <math.h>
 #include <thread>
 #include <chrono>
 #include <atomic>

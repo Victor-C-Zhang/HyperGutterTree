@@ -3,6 +3,7 @@
 #include <utility>
 #include <unistd.h> //sysconf
 #include <string.h> //memcpy
+#include <stdexcept> // to throw exception on Windows TODO: remove
 #include <fcntl.h>  //posix_fallocate
 #include <errno.h>
 #include <fstream>
@@ -11,7 +12,7 @@
  * Static "global" BufferTree variables
  */
 uint32_t BufferTree::num_nodes;
-uint     BufferTree::page_size;
+uint32_t BufferTree::page_size;
 uint8_t  BufferTree::max_level;
 uint32_t BufferTree::buffer_size;
 uint32_t BufferTree::fanout;
@@ -61,7 +62,7 @@ nodes, int workers, bool reset=false) : dir(dir) {
 		flush_buffers[l]   = (char **) malloc(sizeof(char *) * fanout);
 		flush_positions[l] = (char **) malloc(sizeof(char *) * fanout);
 		if(l != 0) read_buffers[l] = (char *) malloc(sizeof(char) * (buffer_size + page_size));
-		for (uint i = 0; i < fanout; i++) {
+		for (uint32_t i = 0; i < fanout; i++) {
 			flush_buffers[l][i] = (char *) calloc(page_size, sizeof(char));
 		}
 	}
@@ -109,7 +110,7 @@ BufferTree::~BufferTree() {
 	free(read_buffers);
 	free(cache);
 	free(root_node);
-	for(uint i = 0; i < buffers.size(); i++) {
+	for(uint32_t i = 0; i < buffers.size(); i++) {
 		if (buffers[i] != nullptr)
 			delete buffers[i];
 	}
@@ -169,7 +170,7 @@ void BufferTree::configure_tree() {
 
 
 void print_tree(std::vector<BufferControlBlock *>bcb_list) {
-	for(uint i = 0; i < bcb_list.size(); i++) {
+	for(uint32_t i = 0; i < bcb_list.size(); i++) {
 		if (bcb_list[i] != nullptr) 
 			bcb_list[i]->print();
 	}
@@ -181,21 +182,21 @@ void BufferTree::setup_tree() {
 	File_Pointer size = 0;
 
 	// create the BufferControlBlocks
-	for (uint l = 1; l <= max_level; l++) { // loop through all levels
+	for (uint32_t l = 1; l <= max_level; l++) { // loop through all levels
 		if(l == 2) size = 0; // reset the size because the first level is held in cache
 
-		uint level_size    = pow(fanout, l); // number of blocks in this level
-		uint plevel_size   = pow(fanout, l-1);
-		uint start         = buffers.size();
-		Node key           = 0;
-		double parent_keys = num_nodes;
-		uint options       = fanout;
+		uint32_t level_size    = pow(fanout, l); // number of blocks in this level
+		uint32_t plevel_size   = pow(fanout, l-1);
+		uint32_t start         = buffers.size();
+		node_id_t key          = 0;
+		double parent_keys     = num_nodes;
+		uint32_t options       = fanout;
 		bool skip          = false;
-		uint parent        = 0;
+		uint32_t parent        = 0;
 		File_Pointer index = 0;
 
 		buffers.reserve(start + level_size);
-		for (uint i = 0; i < level_size; i++) { // loop through all blocks in the level
+		for (uint32_t i = 0; i < level_size; i++) { // loop through all blocks in the level
 			// get the parent of this node if not level 1 and if we have a new parent
 			if (l > 1 && (i-start) % fanout == 0) {
 				parent      = start + i/fanout - plevel_size; // this logic should check out because only the last level is ever not full
@@ -227,30 +228,43 @@ void BufferTree::setup_tree() {
 		}
 	}
 
-    // allocate file space for all the nodes to prevent fragmentation
-    #ifdef HAVE_FALLOCATE
+	// allocate file space for all the nodes to prevent fragmentation
+	#ifdef LINUX_FALLOCATE
 	fallocate(backing_store, 0, 0, size); // linux only but fast
-	#else
-	posix_fallocate(backing_store, 0, size); // portable but much slower
-    #endif
-    
-    backing_EOF = size;
-    // print_tree(buffers);
+  #endif
+  #ifdef WINDOWS_FILEAPI
+  // https://stackoverflow.com/questions/455297/creating-big-file-on-windows/455302#455302
+  // implement the above
+  throw std::runtime_error("Windows is not currently supported by FastBufferTree");
+  #endif
+  #ifdef POSIX_FCNTL
+    // taken from https://github.com/trbs/fallocate
+    fstore_t store_options = {
+        F_ALLOCATECONTIG,
+        F_PEOFPOSMODE,
+        0,
+        static_cast<off_t>(size),
+        0
+    };
+    fcntl(backing_store, F_PREALLOCATE, &store_options);
+  #endif
+	backing_EOF = size;
+	// print_tree(buffers);
 }
 
 // serialize an update to a data location (should only be used for root I think)
 inline void BufferTree::serialize_update(char *dst, update_t src) {
-	Node node1 = src.first;
-	Node node2 = src.second;
+	node_id_t node1 = src.first;
+	node_id_t node2 = src.second;
 
-	memcpy(dst, &node1, sizeof(Node));
-	memcpy(dst + sizeof(Node), &node2, sizeof(Node));
+	memcpy(dst, &node1, sizeof(node_id_t));
+	memcpy(dst + sizeof(node_id_t), &node2, sizeof(node_id_t));
 }
 
 inline update_t BufferTree::deserialize_update(char *src) {
 	update_t dst;
-	memcpy(&dst.first, src, sizeof(Node));
-	memcpy(&dst.second, src + sizeof(Node), sizeof(Node));
+	memcpy(&dst.first, src, sizeof(node_id_t));
+	memcpy(&dst.second, src + sizeof(node_id_t), sizeof(node_id_t));
 
 	return dst;
 }
@@ -263,9 +277,9 @@ inline void BufferTree::copy_serial(char *src, char *dst) {
 /*
  * Load a key from a given location
  */
-inline Node BufferTree::load_key(char *location) {
-	Node key;
-	memcpy(&key, location, sizeof(Node));
+inline node_id_t BufferTree::load_key(char *location) {
+	node_id_t key;
+	memcpy(&key, location, sizeof(node_id_t));
 	return key;
 }
 
@@ -289,12 +303,13 @@ insert_ret_t BufferTree::insert(update_t upd) {
 /*
  * Helper function which determines which child we should flush to
  */
-inline uint32_t which_child(Node key, Node min_key, Node max_key, uint16_t options) {
-	Node total = max_key - min_key + 1;
+inline uint32_t which_child(node_id_t key, node_id_t min_key, node_id_t max_key, uint16_t options) {
+	node_id_t total = max_key - min_key + 1;
 	double div = (double)total / options;
-	uint larger_kids = total % options;
-	uint larger_count = larger_kids * ceil(div);
-	Node idx = key - min_key;
+
+	uint32_t larger_kids = total % options;
+	uint32_t larger_count = larger_kids * ceil(div);
+	node_id_t idx = key - min_key;
 
 	if (idx >= larger_count)
 		return ((idx - larger_count) / (int)div) + larger_kids;
@@ -313,7 +328,7 @@ inline uint32_t which_child(Node key, Node min_key, Node max_key, uint16_t optio
  * at once otherwise the data will clash
  */
 flush_ret_t BufferTree::do_flush(char *data, uint32_t data_size, uint32_t begin, 
-	Node min_key, Node max_key, uint16_t options, uint8_t level) {
+	node_id_t min_key, node_id_t max_key, uint16_t options, uint8_t level) {
 	// setup
 	uint32_t full_flush = page_size - (page_size % serial_update_size);
 
@@ -321,21 +336,21 @@ flush_ret_t BufferTree::do_flush(char *data, uint32_t data_size, uint32_t begin,
 	char **flush_buf = flush_buffers[level];
 
 	char *data_start = data;
-	for (uint i = 0; i < fanout; i++) {
+	for (uint32_t i = 0; i < fanout; i++) {
 		flush_pos[i] = flush_buf[i];
 	}
 
 	while (data - data_start < data_size) {
-		Node key = load_key(data);
+		node_id_t key = load_key(data);
 		uint32_t child  = which_child(key, min_key, max_key, options);
 		if (child > fanout - 1) {
-			printf("ERROR: incorrect child %u abandoning insert key=%lu min=%lu max=%lu\n", child, key, min_key, max_key);
+			printf("ERROR: incorrect child %u abandoning insert key=%u min=%u max=%u\n", child, key, min_key, max_key);
 			printf("first child = %u\n", buffers[begin]->get_id());
 			printf("data pointer = %lu data_start=%lu data_size=%u\n", (uint64_t) data, (uint64_t) data_start, data_size);
 			throw KeyIncorrectError();
 		}
 		if (buffers[child+begin]->min_key > key || buffers[child+begin]->max_key < key) {
-			printf("ERROR: bad key %lu for child %u, child min = %lu, max = %lu\n", 
+			printf("ERROR: bad key %u for child %u, child min = %u, max = %u\n", 
 				key, child, buffers[child+begin]->min_key, buffers[child+begin]->max_key);
 			throw KeyIncorrectError();
 		}
@@ -345,7 +360,7 @@ flush_ret_t BufferTree::do_flush(char *data, uint32_t data_size, uint32_t begin,
 
 		if (flush_pos[child] - flush_buf[child] >= full_flush) {
 			// write to our child, return value indicates if it needs to be flushed
-			uint size = flush_pos[child] - flush_buf[child];
+			uint32_t size = flush_pos[child] - flush_buf[child];
 			if(buffers[begin+child]->write(flush_buf[child], size)) {
 				flush_control_block(buffers[begin+child]);
 			}
@@ -356,10 +371,10 @@ flush_ret_t BufferTree::do_flush(char *data, uint32_t data_size, uint32_t begin,
 	}
 
 	// loop through the flush buffers and write out any non-empty ones
-	for (uint i = 0; i < fanout; i++) {
+	for (uint32_t i = 0; i < fanout; i++) {
 		if (flush_pos[i] - flush_buf[i] > 0) {
 			// write to child i, return value indicates if it needs to be flushed
-			uint size = flush_pos[i] - flush_buf[i];
+			uint32_t size = flush_pos[i] - flush_buf[i];
 			if(buffers[begin+i]->write(flush_buf[i], size)) {
 				flush_control_block(buffers[begin+i]);
 			}
@@ -375,14 +390,14 @@ flush_ret_t inline BufferTree::flush_root() {
 	// root_lock.unlock();
 }
 
-flush_ret_t inline BufferTree::flush_control_block(BufferControlBlock *bcb, bool force) {
+flush_ret_t inline BufferTree::flush_control_block(BufferControlBlock *bcb) {
 	// printf("flushing "); bcb->print();
 	if(bcb->size() == 0) {
 		return; // don't flush empty control blocks
 	}
 
 	if (bcb->is_leaf()) {
-		return flush_leaf_node(bcb, force);
+		return flush_leaf_node(bcb);
 	}
 	return flush_internal_node(bcb);
 }
@@ -414,7 +429,7 @@ flush_ret_t inline BufferTree::flush_internal_node(BufferControlBlock *bcb) {
 	bcb->reset();
 }
 
-flush_ret_t inline BufferTree::flush_leaf_node(BufferControlBlock *bcb, bool force) { 
+flush_ret_t inline BufferTree::flush_leaf_node(BufferControlBlock *bcb) { 
 	uint8_t level = bcb->level;
 	if (level == 1) {
 		read_buffers[level-1] = cache + bcb->offset();
@@ -462,7 +477,7 @@ bool BufferTree::get_data(data_ret_t &data) {
 	data.second.reserve(vec_len); // reserve space for our updates
 
 	// assume the first key is correct so extract it
-	Node key = load_key(serial_data);
+	node_id_t key = load_key(serial_data);
 	data.first = key;
 
 	while(idx < (uint64_t) len) {
@@ -474,7 +489,7 @@ bool BufferTree::get_data(data_ret_t &data) {
 
 		if (upd.first != key) {
 			// error to handle some weird unlikely buffer tree shenanigans
-			printf("ERROR: source node %lu and key %lu do not match in get_data()\n", upd.first, key);
+			printf("ERROR: source node %u and key %u do not match in get_data()\n", upd.first, key);
 			throw KeyIncorrectError();
 		}
 

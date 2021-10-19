@@ -1,7 +1,3 @@
-//
-// Created by victor on 3/2/21.
-//
-
 #include "../include/buffer_control_block.h"
 #include "../include/buffer_tree.h"
 
