@@ -16,30 +16,12 @@ typedef void flush_ret_t;
 typedef std::pair<Node, std::vector<Node>> data_ret_t;
 
 /*
- * Quick and dirty buffer tree skeleton.
- * Metadata about buffers (buffer control blocks) will be stored in memory.
- * The root buffer will be stored in memory.
- * All other buffers will be primarily stored on disk.
- * The tree operates read-lazily, only reading (non-root) buffers into memory
- *    if they need to be flushed.
- * Flushing and flush-related work is handled by a dynamic thread pool.
- * A flush queue will be maintained, from which threads pick tasks.
- * DESIGN NOTE: Currently, a buffer cannot flush to another buffer that needs to
- * be flushed. This is to prevent starvation.
+ * Structure of the BufferTree
  */
 class BufferTree {
 private:
   // root directory of tree
   std::string dir;
-
-  // size of a buffer (leaf buffers will likely be smaller)
-  uint32_t M;
-
-  // branching factor
-  uint32_t B;
-
-  // number of nodes in the graph
-  Node N;
 
   // metadata control block(s)
   // level 1 blocks take indices 0->(B-1). So on and so forth from there
@@ -88,17 +70,23 @@ public:
    * Generates a new homebrew buffer tree.
    * @param dir     file path of the data structure root directory, relative to
    *                the executing workspace.
-   * @param size    the minimum length of one buffer, in updates. Should be
-   *                larger than the branching factor. not guaranteed to be
-   *                the true buffer size, which can be between size and 2*size.
-   * @param b       branching factor.
    * @param nodes   number of nodes in the graph
    * @param workers the number of workers which will be using this buffer tree (defaults to 1)
-   * @param queue_factor  the factor we multiply by workers to get number of queue slots
    * @param reset   should truncate the file storage upon opening
    */
-  BufferTree(std::string dir, uint32_t size, uint32_t b, Node nodes, int workers, int queue_factor, bool reset);
+  BufferTree(std::string dir, Node nodes, int workers, bool reset);
   ~BufferTree();
+
+  /**
+   * Use buffering.conf configuration file to determine parameters of the BufferTree
+   * Sets the following variables
+   * Buffer_Size  :   The size of the root buffer
+   * Fanout       :   The maximum number of children per internal node
+   * Queue_Factor :   The number of queue slots per worker removing data from the queue
+   * Page_Factor  :   Multiply system page size by this number to get our write granularity
+   */
+  void configure_tree();
+
   /**
    * Puts an update into the data structure.
    * @param upd the edge update.
@@ -124,7 +112,7 @@ public:
    * they should check their wait condition again
    * Useful when switching from blocking to non-blocking calls
    * to the circular queue
-   * For example: we set this to true when shutting down the graph_workers
+   * For example: we set this to true when shutting down workers
    * @param    block is true if we should turn on non-blocking operations
    *           and false if we should turn them off
    * @return   nothing
@@ -175,8 +163,12 @@ public:
   static const uint serial_update_size = sizeof(Node) + sizeof(Node);
   static uint8_t max_level;
   static uint32_t buffer_size;
+  static uint32_t fanout;
+  static uint32_t num_nodes;
   static uint64_t backing_EOF;
   static uint64_t leaf_size;
+  static uint32_t queue_factor;
+
   /*
    * File descriptor of backing file for storage
    */

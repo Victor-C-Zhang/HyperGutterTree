@@ -33,7 +33,7 @@ CircularQueue::~CircularQueue() {
 
 void CircularQueue::push(char *elm, int size) {
 	if(size > elm_size) {
-		printf("write of size %i bytes greater than max of %li\n", size, elm_size);
+		printf("CQ: write of size %i bytes greater than max of %li\n", size, elm_size);
 		throw WriteTooBig();
 	}
 
@@ -90,6 +90,6 @@ void CircularQueue::pop(int i) {
 }
 
 void CircularQueue::print() {
-	printf("head=%i, tail=%i, is_full=%s, is_empty=%s\n", 
+	printf("CQ: head=%i, tail=%i, is_full=%s, is_empty=%s\n", 
 		head, tail, full()? "true" : "false", empty()? "true" : "false");
 }
