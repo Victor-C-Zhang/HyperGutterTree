@@ -20,7 +20,7 @@ inline bool BufferControlBlock::needs_flush(uint32_t size) {
 bool BufferControlBlock::write(char *data, uint32_t size) {
 	// printf("Writing to buffer %d data pointer = %p with size %i\n", id, data, size);
 	if(storage_ptr + size > BufferTree::buffer_size + BufferTree::page_size) {
-		printf("buffer %i too full write size %u, storage_ptr = %lu, max = %lu\n", id, size, storage_ptr, BufferTree::buffer_size + BufferTree::page_size);
+		printf("buffer %i too full write size %u, storage_ptr = %lu, max = %u\n", id, size, storage_ptr, BufferTree::buffer_size + BufferTree::page_size);
 		throw BufferFullError(id);
 	}
 	
