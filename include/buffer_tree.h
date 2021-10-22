@@ -72,7 +72,7 @@ public:
    * @param workers the number of workers which will be using this buffer tree (defaults to 1)
    * @param reset   should truncate the file storage upon opening
    */
-  BufferTree(std::string dir, Node nodes, int workers, bool reset);
+  BufferTree(std::string dir, node_id_t nodes, int workers, bool reset);
   ~BufferTree();
 
   /**
