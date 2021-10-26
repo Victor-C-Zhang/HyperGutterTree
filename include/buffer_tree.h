@@ -157,11 +157,11 @@ public:
    * Static variables which track universal information about the buffer tree which
    * we would like to be accesible to all the bufferControlBlocks
    */
-  static uint32_t page_size;
-  static const uint32_t serial_update_size = sizeof(node_id_t) + sizeof(node_id_t);
-  static uint8_t max_level;
-  static uint32_t buffer_size;
-  static uint32_t fanout;
+  static uint32_t page_size;    // write granularity
+  static const uint32_t serial_update_size = sizeof(node_id_t) + sizeof(node_id_t); // size in bytes of an update
+  static uint8_t max_level;     // max depth of the tree
+  static uint32_t buffer_size;  // size of an internal node buffer
+  static uint32_t fanout;       // maximum number of children per node
   static uint32_t num_nodes;
   static uint64_t backing_EOF;
   static uint64_t leaf_size;
