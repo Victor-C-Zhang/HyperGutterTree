@@ -28,7 +28,7 @@ char *   BufferTree::cache;
  * and the number of nodes we will insert(N)
  * We assume that node indices begin at 0 and increase to N-1
  */
-BufferTree::BufferTree(std::string dir, Node
+BufferTree::BufferTree(std::string dir, node_id_t
 nodes, int workers, bool reset=false) : dir(dir) {
   int file_flags = O_RDWR | O_CREAT;
   if (reset) {
