@@ -1,6 +1,7 @@
 #include <gtest/gtest.h>
 #include <thread>
 #include <atomic>
+#include <fstream>
 #include "../include/buffer_tree.h"
 
 #define KB (1 << 10)
@@ -32,16 +33,26 @@ void querier(BufferTree *buf_tree, int nodes) {
   }
 }
 
+void write_configuration(uint32_t buffer_exp, uint32_t fanout, int queue_factor, int page_factor) {
+  std::ofstream conf("./buffering.conf");
+  conf << "buffer_exp=" << buffer_exp << std::endl;
+  conf << "branch=" << fanout << std::endl;
+  conf << "queue_factor=" << queue_factor << std::endl;
+  conf << "page_factor=" << page_factor << std::endl;
+}
+
 // helper function to run a basic test of the buffer tree with
 // various parameters
 // this test only works if the depth of the tree does not exceed 1
 // and no work is claimed off of the work queue
 // to work correctly num_updates must be a multiple of nodes
-void run_test(const int nodes, const int num_updates, const int buffer_size, const int branch_factor) {
-  printf("Running Test: nodes=%i num_updates=%i buffer_size %i branch_factor %i\n",
-         nodes, num_updates, buffer_size, branch_factor);
+void run_test(const int nodes, const int num_updates, const uint32_t buffer_exp, const uint32_t branch_factor) {
+  printf("Running Test: nodes=%i num_updates=%i buffer_size 2^%i branch_factor %i\n",
+         nodes, num_updates, buffer_exp, branch_factor);
 
-  BufferTree *buf_tree = new BufferTree("./test_", buffer_size, branch_factor, nodes, 1, true);
+  write_configuration(buffer_exp, branch_factor, 8, 1); // 8 is queue_factor, 1 is page_factor
+
+  BufferTree *buf_tree = new BufferTree("./test_", nodes, 1, true);
   shutdown = false;
   upd_processed = 0;
   std::thread qworker(querier, buf_tree, nodes);
@@ -64,33 +75,28 @@ void run_test(const int nodes, const int num_updates, const int buffer_size, con
 TEST(BasicInsert, Small) {
   const int nodes = 10;
   const int num_updates = 400;
-  const int buf = KB << 2;
+  const int buf_exp = 12;
   const int branch = 2;
 
-  run_test(nodes, num_updates, buf, branch);
+  run_test(nodes, num_updates, buf_exp, branch);
 }
 
 TEST(BasicInsert, Medium) {
   const int nodes = 100;
   const int num_updates = 360000;
-  const int buf = MB;
+  const int buf_exp = 20;
   const int branch = 8;
 
-  run_test(nodes, num_updates, buf, branch);
+  run_test(nodes, num_updates, buf_exp, branch);
 }
 
-// test where we fill the lowest buffers as full as we can
-// with insertions.
-TEST(BasicInsert, FillLowest) {
-  uint32_t updates = (8 * MB) / BufferTree::serial_update_size;
-  updates -= updates % 8 + 8;
-
-  const int nodes = 8;
-  const int num_updates = updates;
-  const int buf = MB;
+TEST(BasicInsert, ManyInserts) {
+  const int nodes = 32;
+  const int num_updates = 1000000;
+  const int buf_exp = 20;
   const int branch = 2;
 
-  run_test(nodes, num_updates, buf, branch);
+  run_test(nodes, num_updates, buf_exp, branch);
 }
 
 // test designed to trigger recursive flushes
@@ -102,12 +108,14 @@ TEST(BasicInsert, FillLowest) {
 // For exampele 0 and 2, then 0 and 4, etc. 
 TEST(BasicInsert, EvilInsertions) {
   int full_root = MB/BufferTree::serial_update_size;
-  const int nodes = 32;
+  const int nodes       = 32;
   const int num_updates = 4 * full_root;
-  const int buf = MB;
-  const int branch = 2;
+  const int buf_exp     = 20;
+  const int branch      = 2;
 
-  BufferTree *buf_tree = new BufferTree("./test_", buf, branch, nodes, 1, true);
+  write_configuration(buf_exp, branch, 8, 5); // 8 is queue_factor, 5 is page_factor
+
+  BufferTree *buf_tree = new BufferTree("./test_", nodes, 1, true);
   shutdown = false;
   upd_processed = 0;
   std::thread qworker(querier, buf_tree, nodes);
@@ -143,14 +151,16 @@ TEST(BasicInsert, EvilInsertions) {
 
 
 TEST(Parallelism, ManyQueryThreads) {
-  const int nodes = 1024;
+  const int nodes       = 1024;
   const int num_updates = 5206;
-  const int buf = MB;
-  const int branch = 2;
+  const int buf_exp     = 20;
+  const int branch      = 2;
 
   // here we limit the number of slots in the circular queue to 
-  // create contention between the threads. (we pass 5 instead of 20)
-  BufferTree *buf_tree = new BufferTree("./test_", buf, branch, nodes, 5, true);
+  // create contention between the threads. (we pass 5 threads and queue factor =1 instead of 20,8)
+  write_configuration(buf_exp, branch, 1, 5); // 1 is queue_factor, 5 is page_factor
+
+  BufferTree *buf_tree = new BufferTree("./test_", nodes, 5, true);
   shutdown = false;
   upd_processed = 0;
   std::thread query_threads[20];

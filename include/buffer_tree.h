@@ -14,30 +14,12 @@ typedef void flush_ret_t;
 typedef std::pair<Node, std::vector<Node>> data_ret_t;
 
 /*
- * Quick and dirty buffer tree skeleton.
- * Metadata about buffers (buffer control blocks) will be stored in memory.
- * The root buffer will be stored in memory.
- * All other buffers will be primarily stored on disk.
- * The tree operates read-lazily, only reading (non-root) buffers into memory
- *    if they need to be flushed.
- * Flushing and flush-related work is handled by a dynamic thread pool.
- * A flush queue will be maintained, from which threads pick tasks.
- * DESIGN NOTE: Currently, a buffer cannot flush to another buffer that needs to
- * be flushed. This is to prevent starvation.
+ * Structure of the BufferTree
  */
 class BufferTree {
 private:
   // root directory of tree
   std::string dir;
-
-  // size of a buffer (leaf buffers will likely be smaller)
-  uint32_t M;
-
-  // branching factor
-  uint32_t B;
-
-  // number of nodes in the graph
-  node_id_t N;
 
   // metadata control block(s)
   // level 1 blocks take indices 0->(B-1). So on and so forth from there
@@ -58,6 +40,8 @@ private:
   char *root_node;
   flush_ret_t flush_root();
   flush_ret_t flush_control_block(BufferControlBlock *bcb);
+  flush_ret_t flush_internal_node(BufferControlBlock *bcb);
+  flush_ret_t flush_leaf_node(BufferControlBlock *bcb);
   uint32_t root_position;
   std::mutex root_lock;
 
@@ -84,16 +68,23 @@ public:
    * Generates a new homebrew buffer tree.
    * @param dir     file path of the data structure root directory, relative to
    *                the executing workspace.
-   * @param size    the minimum length of one buffer, in updates. Should be
-   *                larger than the branching factor. not guaranteed to be
-   *                the true buffer size, which can be between size and 2*size.
-   * @param b       branching factor.
    * @param nodes   number of nodes in the graph
    * @param workers the number of workers which will be using this buffer tree (defaults to 1)
    * @param reset   should truncate the file storage upon opening
    */
-  BufferTree(std::string dir, uint32_t size, uint32_t b, node_id_t nodes, int workers, bool reset);
+  BufferTree(std::string dir, node_id_t nodes, int workers, bool reset);
   ~BufferTree();
+
+  /**
+   * Use buffering.conf configuration file to determine parameters of the BufferTree
+   * Sets the following variables
+   * Buffer_Size  :   The size of the root buffer
+   * Fanout       :   The maximum number of children per internal node
+   * Queue_Factor :   The number of queue slots per worker removing data from the queue
+   * Page_Factor  :   Multiply system page size by this number to get our write granularity
+   */
+  void configure_tree();
+
   /**
    * Puts an update into the data structure.
    * @param upd the edge update.
@@ -119,7 +110,7 @@ public:
    * they should check their wait condition again
    * Useful when switching from blocking to non-blocking calls
    * to the circular queue
-   * For example: we set this to true when shutting down the graph_workers
+   * For example: we set this to true when shutting down workers
    * @param    block is true if we should turn on non-blocking operations
    *           and false if we should turn them off
    * @return   nothing
@@ -166,16 +157,22 @@ public:
    * Static variables which track universal information about the buffer tree which
    * we would like to be accesible to all the bufferControlBlocks
    */
-  static uint32_t page_size;
-  static const uint32_t serial_update_size = sizeof(node_id_t) + sizeof(node_id_t);
-  static uint8_t max_level;
-  static uint32_t buffer_size;
+  static uint32_t page_size;    // write granularity
+  static const uint32_t serial_update_size = sizeof(node_id_t) + sizeof(node_id_t); // size in bytes of an update
+  static uint8_t max_level;     // max depth of the tree
+  static uint32_t buffer_size;  // size of an internal node buffer
+  static uint32_t fanout;       // maximum number of children per node
+  static uint32_t num_nodes;
   static uint64_t backing_EOF;
   static uint64_t leaf_size;
+  static uint32_t queue_factor;
+
   /*
    * File descriptor of backing file for storage
    */
   static int backing_store;
+  // a chunk of memory we reserve to cache the first level of the buffer tree
+  static char *cache;
 };
 
 class BufferFullError : public std::exception {

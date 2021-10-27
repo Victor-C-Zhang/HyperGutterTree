@@ -2,6 +2,7 @@
 #include <thread>
 #include <chrono>
 #include <atomic>
+#include <fstream>
 #include "../include/buffer_tree.h"
 
 #define KB (uint64_t (1 << 10))
@@ -33,13 +34,21 @@ void querier(BufferTree *buf_tree, int nodes) {
   }
 }
 
+void write_configuration(uint32_t buffer_exp, uint32_t fanout, int queue_factor, int page_factor) {
+  std::ofstream conf("./buffering.conf");
+  conf << "buffer_exp=" << buffer_exp << std::endl;
+  conf << "branch=" << fanout << std::endl;
+  conf << "queue_factor=" << queue_factor << std::endl;
+  conf << "page_factor=" << page_factor << std::endl;
+}
+
 void progress(const uint64_t num_updates) {
     while(true) {
         sleep(5);
         uint64_t cur = upd_processed.load();
         printf("number of insertions processed: %lu %f%% \r", cur, cur/((double)num_updates/100));
-
         fflush(stdout);
+
         if (upd_processed == num_updates) {
             printf("number of insertions processed: DONE         \n");
             break;
@@ -52,12 +61,14 @@ void progress(const uint64_t num_updates) {
 // this test only works if the depth of the tree does not exceed 1
 // and no work is claimed off of the work queue
 // to work correctly num_updates must be a multiple of nodes
-void run_test(const int nodes, const uint64_t num_updates, const uint64_t buffer_size, 
+void run_test(const int nodes, const uint64_t num_updates, const uint64_t buffer_exp, 
  const int branch_factor, const int threads=1) {
-    printf("Running Test: nodes=%i num_updates=%lu buffer_size %lu branch_factor %i\n",
-         nodes, num_updates, buffer_size, branch_factor);
+    printf("Running Test: nodes=%i num_updates=%lu buffer_size 2^%lu branch_factor %i\n",
+         nodes, num_updates, buffer_exp, branch_factor);
 
-    BufferTree *buf_tree = new BufferTree("./test_", buffer_size, branch_factor, nodes, threads, true);
+    write_configuration(buffer_exp, branch_factor, 16, 5);
+
+    BufferTree *buf_tree = new BufferTree("./test_", nodes, threads, true);
     shutdown = false;
     upd_processed = 0;
 
@@ -93,36 +104,46 @@ void run_test(const int nodes, const uint64_t num_updates, const uint64_t buffer
 TEST(Experiment, LargeStandard) {
     const int nodes            = 512;
     const uint64_t num_updates = MB << 5;
-    const uint64_t buf         = MB;
+    const uint64_t buf_exp     = 20;
     const int branch           = 8;
 
-    run_test(nodes, num_updates, buf, branch);
+    run_test(nodes, num_updates, buf_exp, branch);
 }
 
 TEST(Experiment, LargeWide) {
     const int nodes            = 512;
     const uint64_t num_updates = MB << 5;
-    const uint64_t buf         = MB;
+    const uint64_t buf_exp     = 20;
     const int branch           = 16;
 
-    run_test(nodes, num_updates, buf, branch);
+    run_test(nodes, num_updates, buf_exp, branch);
 }
 
 TEST(Experiment, ExtraLarge) {
     const int nodes            = 1024;
     const uint64_t num_updates = MB << 8;
-    const uint64_t buf         = MB << 1;
+    const uint64_t buf_exp     = 21;
     const int branch           = 16;
 
-    run_test(nodes, num_updates, buf, branch);
+    run_test(nodes, num_updates, buf_exp, branch);
 }
 
 TEST(SteadyState, HugeExperiment) {
     const int nodes            = 250000;
-    const uint64_t num_updates = GB << 4; // 17 billion
-    const uint64_t buf         = MB;
-    const int branch           = 256;
-    const int threads          = 40;
+    const uint64_t num_updates = GB << 2; // 8 billion
+    const uint64_t buf_exp     = 20;
+    const int branch           = 64;
+    const int threads          = 10;
 
-    run_test(nodes, num_updates, buf, branch, threads);
+    run_test(nodes, num_updates, buf_exp, branch, threads);
+}
+
+TEST(SteadyState, BigFanoutExperiment) {
+    const int nodes            = 250000;
+    const uint64_t num_updates = GB << 2; // 8 billion
+    const uint64_t buf_exp     = 20;
+    const int branch           = 512;
+    const int threads          = 10;
+
+    run_test(nodes, num_updates, buf_exp, branch, threads);
 }
