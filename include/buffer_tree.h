@@ -63,6 +63,24 @@ private:
   // Circular queue in which we place leaves that fill up
   CircularQueue *cq;
 
+  /*
+   * Variables which track universal information about the buffer tree which
+   * we would like to be accesible to all the bufferControlBlocks
+   */
+  uint32_t page_size;    // write granularity
+  uint8_t  max_level;    // max depth of the tree
+  uint32_t buffer_size;  // size of an internal node buffer
+  uint32_t fanout;       // maximum number of children per node
+  uint32_t num_nodes;    // number of unique ids to buffer
+  uint64_t backing_EOF;  // file to write tree to
+  uint64_t leaf_size;    // size of a leaf buffer
+  uint32_t queue_factor; // number of elements in queue is this factor * num_workers
+
+  //File descriptor of backing file for storage
+  int backing_store;
+  // a chunk of memory we reserve to cache the first level of the buffer tree
+  char *cache;
+
 public:
   /**
    * Generates a new homebrew buffer tree.
@@ -154,25 +172,21 @@ public:
   void setup_tree();
 
   /*
-   * Static variables which track universal information about the buffer tree which
-   * we would like to be accesible to all the bufferControlBlocks
+   * A bunch of functions for accessing buffer tree variables
    */
-  static uint32_t page_size;    // write granularity
-  static const uint32_t serial_update_size = sizeof(node_id_t) + sizeof(node_id_t); // size in bytes of an update
-  static uint8_t max_level;     // max depth of the tree
-  static uint32_t buffer_size;  // size of an internal node buffer
-  static uint32_t fanout;       // maximum number of children per node
-  static uint32_t num_nodes;
-  static uint64_t backing_EOF;
-  static uint64_t leaf_size;
-  static uint32_t queue_factor;
+  inline uint32_t get_page_size()    { return page_size; };
+  inline uint8_t  get_max_level()    { return max_level; };
+  inline uint32_t get_buffer_size()  { return buffer_size; };
+  inline uint64_t get_leaf_size()    { return leaf_size; };
+  inline uint32_t get_fanout()       { return fanout; };
+  inline uint32_t get_num_nodes()    { return num_nodes; };
+  inline uint64_t get_file_size()    { return backing_EOF; };
+  inline uint32_t get_queue_factor() { return queue_factor; };
 
-  /*
-   * File descriptor of backing file for storage
-   */
-  static int backing_store;
-  // a chunk of memory we reserve to cache the first level of the buffer tree
-  static char *cache;
+  inline int get_fd()       { return backing_store; };
+  inline char * get_cache() { return cache; };
+
+  static const uint32_t serial_update_size = sizeof(node_id_t) + sizeof(node_id_t); // size in bytes of an update
 };
 
 class BufferFullError : public std::exception {

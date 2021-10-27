@@ -8,6 +8,8 @@
 typedef uint32_t buffer_id_t;
 typedef uint64_t File_Pointer;
 
+class BufferTree;
+
 /**
  * Buffer metadata class. Care should be taken to synchronize access to the
  * *entire* data structure.
@@ -26,12 +28,14 @@ private:
   File_Pointer file_offset;
 
   /*
-   * Check if this buffer needs a flush. 
-   * In the case of leaf nodes this returns true if the leaf has a new sketch sized buffer ready
-   * @param size  the size of the current write
-   * @return true if buffer needs a flush
+   * Check if this buffer needs a flush or if the current write will overflow
+   * @param size            the size of the current write
+   * @param flush_size      if the buffer will be at least this full then we need to flush
+   * @param max_size        if the buffer will be at least this full that would cause overflow
+   * @return true           if buffer needs a flush, false if not
+   * @throw BufferFullError if the write will overflow the buffer size.
    */
-  bool needs_flush(uint32_t size);
+  bool check_size_limit(uint32_t size, uint32_t flush_size, uint32_t max_size);
 
 public:
   // this node's level in the tree. 0 is root, 1 is it's children, etc
@@ -55,24 +59,19 @@ public:
 
   /*
    * Write to the buffer managed by this metadata.
+   * @param the buffer tree this control block is a part of
    * @param data the data to write
    * @param size the size in bytes of the data to write
    * @return true if buffer needs flush and false otherwise
    */
-  bool write(char *data, uint32_t size);
+  bool write(BufferTree *bf, char *data, uint32_t size);
 
-  /*
-   * Flush the buffer this block controls
-   * @return nothing
-   */
-  void flush();
-
-  inline bool is_leaf()  {return min_key == max_key;}
-
+  // some basic functions for access and manipulating a control block
+  inline bool is_leaf()                  {return min_key == max_key;}
   inline void reset(File_Pointer npos=0) {storage_ptr = npos;}
-  inline buffer_id_t get_id() {return id;}
-  inline File_Pointer size() {return storage_ptr;}
-  inline File_Pointer offset() {return file_offset;}
+  inline buffer_id_t get_id()            {return id;}
+  inline File_Pointer size()             {return storage_ptr;}
+  inline File_Pointer offset()           {return file_offset;}
   inline void add_child(buffer_id_t child) {
     children_num++;
     first_child = (first_child == 0)? child : first_child;

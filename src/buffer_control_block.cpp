@@ -10,32 +10,26 @@ BufferControlBlock::BufferControlBlock(buffer_id_t id, File_Pointer off, uint8_t
   storage_ptr = 0;
 }
 
-inline bool BufferControlBlock::needs_flush(uint32_t size) {
-  if(is_leaf())
-    return ((storage_ptr % BufferTree::leaf_size) < size) || (storage_ptr >= BufferTree::buffer_size);
-  else
-    return storage_ptr >= BufferTree::buffer_size;
+inline bool BufferControlBlock::check_size_limit(uint32_t size, uint32_t flush_size, uint32_t max_size) {
+  if (storage_ptr + size > max_size) {
+    printf("buffer %i too full write size %u, storage_ptr = %lu, max = %u\n", id, size, storage_ptr, max_size);
+    throw BufferFullError(id);
+  }
+  return storage_ptr + size >= flush_size;
 }
 
-bool BufferControlBlock::write(char *data, uint32_t size) {
+bool BufferControlBlock::write(BufferTree *bf, char *data, uint32_t size) {
   // printf("Writing to buffer %d data pointer = %p with size %i\n", id, data, size);
-  if(storage_ptr + size > BufferTree::buffer_size + BufferTree::page_size) {
-    printf("buffer %i too full write size %u, storage_ptr = %lu, max = %u\n", id, size, storage_ptr, BufferTree::buffer_size + BufferTree::page_size);
-    throw BufferFullError(id);
-  }
-  
-  if(is_leaf() && storage_ptr + size > BufferTree::leaf_size + BufferTree::page_size) {
-    printf("leaf %i too full write size %u storage_ptr = %lu, max = %lu\n", id, size, storage_ptr, BufferTree::leaf_size + BufferTree::page_size);
-    throw BufferFullError(id);
-  }
+  uint32_t flush_size = is_leaf()? bf->get_leaf_size() : bf->get_buffer_size();
+  bool need_flush = check_size_limit(size, flush_size, flush_size + bf->get_page_size());
 
   if (level == 1) { // we cache the first level of the buffer tree
-    memcpy(BufferTree::cache + file_offset + storage_ptr, data, size);
+    memcpy(bf->get_cache() + file_offset + storage_ptr, data, size);
     storage_ptr += size;
-    return needs_flush(size);
+    return need_flush;
   }
 
-  int len = pwrite(BufferTree::backing_store, data, size, file_offset + storage_ptr);
+  int len = pwrite(bf->get_fd(), data, size, file_offset + storage_ptr);
   int w = 0;
   while(len < (int32_t)size) {
     if (len == -1) {
@@ -44,10 +38,10 @@ bool BufferControlBlock::write(char *data, uint32_t size) {
     }
     w += len;
     size -= len;
-    len = pwrite(BufferTree::backing_store, data + w, size, file_offset + storage_ptr + w);
+    len = pwrite(bf->get_fd(), data + w, size, file_offset + storage_ptr + w);
   }
   storage_ptr += size;
 
   // return if this buffer should be added to the flush queue
-  return needs_flush(size);
+  return need_flush;
 }
