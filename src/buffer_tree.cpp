@@ -9,20 +9,6 @@
 #include <fstream>
 
 /*
- * Static "global" BufferTree variables
- */
-uint32_t BufferTree::num_nodes;
-uint32_t BufferTree::page_size;
-uint8_t  BufferTree::max_level;
-uint32_t BufferTree::buffer_size;
-uint32_t BufferTree::fanout;
-uint64_t BufferTree::backing_EOF;
-uint64_t BufferTree::leaf_size;
-uint32_t BufferTree::queue_factor;
-int      BufferTree::backing_store;
-char *   BufferTree::cache;
-
-/*
  * Constructor
  * Sets up the buffer tree given the storage directory, buffer size, number of children
  * and the number of nodes we will insert(N)
@@ -43,7 +29,7 @@ nodes, int workers, bool reset=false) : dir(dir) {
     buffer_size = page_size;
   }
   
-  // setup static variables
+  // setup universal variables
   num_nodes       = nodes;
   max_level       = ceil(log(num_nodes) / log(fanout));
   backing_EOF     = 0;
@@ -362,7 +348,7 @@ flush_ret_t BufferTree::do_flush(char *data, uint32_t data_size, uint32_t begin,
     if (flush_pos[child] - flush_buf[child] >= full_flush) {
       // write to our child, return value indicates if it needs to be flushed
       uint32_t size = flush_pos[child] - flush_buf[child];
-      if(buffers[begin+child]->write(flush_buf[child], size)) {
+      if(buffers[begin+child]->write(this, flush_buf[child], size)) {
         flush_control_block(buffers[begin+child]);
       }
 
@@ -376,7 +362,7 @@ flush_ret_t BufferTree::do_flush(char *data, uint32_t data_size, uint32_t begin,
     if (flush_pos[i] - flush_buf[i] > 0) {
       // write to child i, return value indicates if it needs to be flushed
       uint32_t size = flush_pos[i] - flush_buf[i];
-      if(buffers[begin+i]->write(flush_buf[i], size)) {
+      if(buffers[begin+i]->write(this, flush_buf[i], size)) {
         flush_control_block(buffers[begin+i]);
       }
     }
