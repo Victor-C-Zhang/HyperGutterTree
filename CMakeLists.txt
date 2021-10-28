@@ -97,7 +97,7 @@ else()
   target_compile_options(GutterTree PRIVATE -DPOSIX_FCNTL)
 endif ()
 set_target_properties(GutterTree PROPERTIES PUBLIC_HEADER 
-  "include/gutter_tree.h;include/buffer_control_block.h;include/standalone_gutters.h;include/work_queue.h;include/types.h"
+  "include/gutter_tree.h;include/buffer_control_block.h;include/standalone_gutters.h;include/work_queue.h;include/types.h;include/buffering_system.h"
 )
 
 add_executable(buffering_tests
