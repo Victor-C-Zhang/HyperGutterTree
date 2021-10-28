@@ -95,6 +95,33 @@ TEST(StandAloneGutters, ManyInserts) {
   run_test(nodes, num_updates, gutter_factor);
 }
 
+TEST(StandAloneGutters, AsAbstract) {
+  const int nodes = 10;
+  const int num_updates = 400;
+  const int gutter_factor = 1;
+
+  write_configuration(8, gutter_factor);
+
+  BufferingSystem *buf = new StandAloneGutters(nodes, 1);
+  shutdown = false;
+  upd_processed = 0;
+  std::thread qworker(querier, (StandAloneGutters *) buf, nodes);
+
+  for (int i = 0; i < num_updates; i++) {
+    update_t upd;
+    upd.first = i % nodes;
+    upd.second = (nodes - 1) - (i % nodes);
+    buf->insert(upd);
+  }
+  printf("force flush\n");
+  buf->force_flush();
+  shutdown = true;
+  buf->set_non_block(true); // switch to non-blocking calls in an effort to exit
+  qworker.join();
+  ASSERT_EQ(num_updates, upd_processed);
+  delete buf;
+}
+
 // test designed to stress test a small number of buffers
 TEST(StandAloneGutters, HitNodePairs) {
   const int nodes       = 32;

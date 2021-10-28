@@ -63,6 +63,7 @@ if(NOT GTest_FOUND)
 endif()
 
 add_library(GutterTree
+    include/buffering_system.h
     src/gutter_tree.cpp
     include/gutter_tree.h
     src/buffer_control_block.cpp

@@ -8,6 +8,7 @@
 #include "types.h"
 #include "buffer_control_block.h"
 #include "work_queue.h"
+#include "buffering_system.h"
 
 typedef void insert_ret_t;
 typedef void flush_ret_t;
@@ -16,7 +17,7 @@ typedef std::pair<Node, std::vector<Node>> data_ret_t;
 /*
  * Structure of the GutterTree
  */
-class GutterTree {
+class GutterTree : public BufferingSystem {
 private:
   // root directory of tree
   std::string dir;

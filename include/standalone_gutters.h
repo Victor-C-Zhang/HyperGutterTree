@@ -1,11 +1,12 @@
 #pragma once
 #include "work_queue.h"
 #include "types.h"
+#include "buffering_system.h"
 
 /**
  * In-memory wrapper to offer the same interface as a buffer tree.
  */
-class StandAloneGutters {
+class StandAloneGutters : public BufferingSystem {
 private:
   uint32_t buffer_size; // size of a buffer (including metadata)
   WorkQueue *wq;

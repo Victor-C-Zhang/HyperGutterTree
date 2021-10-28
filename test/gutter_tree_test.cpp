@@ -99,6 +99,33 @@ TEST(GutterTree, ManyInserts) {
   run_test(nodes, num_updates, buf_exp, branch);
 }
 
+TEST(GutterTree, AsAbstract) {
+  const int nodes = 10;
+  const int num_updates = 400;
+  const int buf_exp = 12;
+  const int branch = 2;
+
+  write_configuration(buf_exp, branch, 8, 1); // 8 is queue_factor, 1 is page_factor
+  BufferingSystem *buf = new GutterTree("./test", nodes, 1, true);
+  shutdown = false;
+  upd_processed = 0;
+  std::thread qworker(querier, (GutterTree *) buf, nodes);
+
+  for (int i = 0; i < num_updates; i++) {
+    update_t upd;
+    upd.first = i % nodes;
+    upd.second = (nodes - 1) - (i % nodes);
+    buf->insert(upd);
+  }
+  printf("force flush\n");
+  buf->force_flush();
+  shutdown = true;
+  buf->set_non_block(true); // switch to non-blocking calls in an effort to exit
+  qworker.join();
+  ASSERT_EQ(num_updates, upd_processed);
+  delete buf;
+}
+
 // test designed to trigger recursive flushes
 // Insert full root buffers which are 95% node 0 and 5% a node
 // which will make 95% split from 5% at different levels of 
