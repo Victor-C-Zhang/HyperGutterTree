@@ -63,7 +63,7 @@ void WorkQueue::push(char *elm, int size) {
 bool WorkQueue::peek(std::pair<int, queue_elm> &ret) {
   do {
     std::unique_lock<std::mutex> lk(read_lock);
-    cirq_empty.wait_for(lk, std::chrono::seconds(2), [this]{return (!empty() || no_block);});
+    cirq_empty.wait_for(lk, std::chrono::milliseconds(500), [this]{return (!empty() || no_block);});
     if(!empty()) {
       int temp = tail;
       queue_array[tail].touched = true;
