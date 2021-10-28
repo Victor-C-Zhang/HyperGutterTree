@@ -135,7 +135,7 @@ endif ()
 
 #uncomment if manually installing project
 #without specifying INSTALL_PREFIX elsewhere
-#set(CMAKE_INSTALL_PREFIX ${CMAKE_CURRENT_BINARY_DIR}/BufferTree/prefix)
+#set(CMAKE_INSTALL_PREFIX ${CMAKE_CURRENT_BINARY_DIR}/GutterTree/prefix)
 
 # for use when building as an external project
 install(TARGETS GutterTree
