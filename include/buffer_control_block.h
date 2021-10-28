@@ -3,12 +3,12 @@
 #include <string>
 #include <mutex>
 #include <condition_variable>
-#include "update.h"
+#include "types.h"
 
 typedef uint32_t buffer_id_t;
 typedef uint64_t File_Pointer;
 
-class BufferTree;
+class GutterTree;
 
 /**
  * Buffer metadata class. Care should be taken to synchronize access to the
@@ -64,7 +64,7 @@ public:
    * @param size the size in bytes of the data to write
    * @return true if buffer needs flush and false otherwise
    */
-  bool write(BufferTree *bf, char *data, uint32_t size);
+  bool write(GutterTree *bf, char *data, uint32_t size);
 
   // some basic functions for access and manipulating a control block
   inline bool is_leaf()                  {return min_key == max_key;}

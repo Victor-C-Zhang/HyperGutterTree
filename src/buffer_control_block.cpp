@@ -1,5 +1,5 @@
 #include "../include/buffer_control_block.h"
-#include "../include/buffer_tree.h"
+#include "../include/gutter_tree.h"
 
 #include <unistd.h>
 #include <errno.h>
@@ -18,18 +18,18 @@ inline bool BufferControlBlock::check_size_limit(uint32_t size, uint32_t flush_s
   return storage_ptr + size >= flush_size;
 }
 
-bool BufferControlBlock::write(BufferTree *bf, char *data, uint32_t size) {
+bool BufferControlBlock::write(GutterTree *gt, char *data, uint32_t size) {
   // printf("Writing to buffer %d data pointer = %p with size %i\n", id, data, size);
-  uint32_t flush_size = is_leaf()? bf->get_leaf_size() : bf->get_buffer_size();
-  bool need_flush = check_size_limit(size, flush_size, flush_size + bf->get_page_size());
+  uint32_t flush_size = is_leaf()? gt->get_leaf_size() : gt->get_buffer_size();
+  bool need_flush = check_size_limit(size, flush_size, flush_size + gt->get_page_size());
 
   if (level == 1) { // we cache the first level of the buffer tree
-    memcpy(bf->get_cache() + file_offset + storage_ptr, data, size);
+    memcpy(gt->get_cache() + file_offset + storage_ptr, data, size);
     storage_ptr += size;
     return need_flush;
   }
 
-  int len = pwrite(bf->get_fd(), data, size, file_offset + storage_ptr);
+  int len = pwrite(gt->get_fd(), data, size, file_offset + storage_ptr);
   int w = 0;
   while(len < (int32_t)size) {
     if (len == -1) {
@@ -38,7 +38,7 @@ bool BufferControlBlock::write(BufferTree *bf, char *data, uint32_t size) {
     }
     w += len;
     size -= len;
-    len = pwrite(bf->get_fd(), data + w, size, file_offset + storage_ptr + w);
+    len = pwrite(gt->get_fd(), data + w, size, file_offset + storage_ptr + w);
   }
   storage_ptr += size;
 

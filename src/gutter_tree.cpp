@@ -1,4 +1,4 @@
-#include "../include/buffer_tree.h"
+#include "../include/gutter_tree.h"
 
 #include <utility>
 #include <unistd.h> //sysconf
@@ -14,7 +14,7 @@
  * and the number of nodes we will insert(N)
  * We assume that node indices begin at 0 and increase to N-1
  */
-BufferTree::BufferTree(std::string dir, node_id_t
+GutterTree::GutterTree(std::string dir, node_id_t
 nodes, int workers, bool reset=false) : dir(dir) {
   int file_flags = O_RDWR | O_CREAT;
   if (reset) {
@@ -56,7 +56,7 @@ nodes, int workers, bool reset=false) : dir(dir) {
 
   // open the file which will be our backing store for the non-root nodes
   // create it if it does not already exist
-  std::string file_name = dir + "buffer_tree_v0.2.data";
+  std::string file_name = dir + "gutter_tree_v0.3.data";
   printf("opening file %s\n", file_name.c_str());
   backing_store = open(file_name.c_str(), file_flags, S_IRUSR | S_IWUSR);
   if (backing_store == -1) {
@@ -66,8 +66,8 @@ nodes, int workers, bool reset=false) : dir(dir) {
 
   setup_tree(); // setup the buffer tree
 
-  // create the circular queue in which we will place ripe fruit (full leaves)
-  cq = new CircularQueue(queue_factor*workers, leaf_size + page_size);
+  // create the work queue in which we will place ripe fruit (full leaves)
+  wq = new WorkQueue(queue_factor*workers, leaf_size + page_size);
   
   // will want to use mmap instead? - how much is in RAM after allocation (none?)
   // can't use mmap instead might use it as well. (Still need to create the file to be a given size)
@@ -77,9 +77,9 @@ nodes, int workers, bool reset=false) : dir(dir) {
   // printf("Successfully created buffer tree\n");
 }
 
-BufferTree::~BufferTree() {
-  printf("Closing BufferTree\n");
-  cq->get_stats();
+GutterTree::~GutterTree() {
+  printf("Closing GutterTree\n");
+  wq->get_stats();
   // force_flush(); // flush everything to leaves (could just flush to files in higher levels)
 
   // free malloc'd memory
@@ -100,12 +100,12 @@ BufferTree::~BufferTree() {
     if (buffers[i] != nullptr)
       delete buffers[i];
   }
-  delete cq;
+  delete wq;
   close(backing_store);
 }
 
-// Read the configuration file to determine a variety of BufferTree params
-void BufferTree::configure_tree() {
+// Read the configuration file to determine a variety of GutterTree params
+void GutterTree::configure_tree() {
   uint32_t buffer_exp  = 20;
   uint16_t branch      = 64;
   int queue_f          = 2;
@@ -146,7 +146,7 @@ void BufferTree::configure_tree() {
       }
     }
   } else {
-    printf("WARNING: Could not open BufferTree configuration file! Using default setttings.\n");
+    printf("WARNING: Could not open buffering configuration file! Using default setttings.\n");
   }
   buffer_size = 1 << buffer_exp;
   fanout = branch;
@@ -164,7 +164,7 @@ void print_tree(std::vector<BufferControlBlock *>bcb_list) {
 }
 
 // TODO: clean up this function
-void BufferTree::setup_tree() {
+void GutterTree::setup_tree() {
   printf("Creating a tree of depth %i\n", max_level);
   File_Pointer size = 0;
 
@@ -222,7 +222,7 @@ void BufferTree::setup_tree() {
   #ifdef WINDOWS_FILEAPI
   // https://stackoverflow.com/questions/455297/creating-big-file-on-windows/455302#455302
   // implement the above
-  throw std::runtime_error("Windows is not currently supported by FastBufferTree");
+  throw std::runtime_error("Windows is not currently supported by GutterTree");
   #endif
   #ifdef POSIX_FCNTL
     // taken from https://github.com/trbs/fallocate
@@ -240,7 +240,7 @@ void BufferTree::setup_tree() {
 }
 
 // serialize an update to a data location (should only be used for root I think)
-inline void BufferTree::serialize_update(char *dst, update_t src) {
+inline void GutterTree::serialize_update(char *dst, update_t src) {
   node_id_t node1 = src.first;
   node_id_t node2 = src.second;
 
@@ -248,7 +248,7 @@ inline void BufferTree::serialize_update(char *dst, update_t src) {
   memcpy(dst + sizeof(node_id_t), &node2, sizeof(node_id_t));
 }
 
-inline update_t BufferTree::deserialize_update(char *src) {
+inline update_t GutterTree::deserialize_update(char *src) {
   update_t dst;
   memcpy(&dst.first, src, sizeof(node_id_t));
   memcpy(&dst.second, src + sizeof(node_id_t), sizeof(node_id_t));
@@ -257,14 +257,14 @@ inline update_t BufferTree::deserialize_update(char *src) {
 }
 
 // copy two serailized updates between two locations
-inline void BufferTree::copy_serial(char *src, char *dst) {
+inline void GutterTree::copy_serial(char *src, char *dst) {
   memcpy(dst, src, serial_update_size);
 }
 
 /*
  * Load a key from a given location
  */
-inline node_id_t BufferTree::load_key(char *location) {
+inline node_id_t GutterTree::load_key(char *location) {
   node_id_t key;
   memcpy(&key, location, sizeof(node_id_t));
   return key;
@@ -274,7 +274,7 @@ inline node_id_t BufferTree::load_key(char *location) {
  * Perform an insertion to the buffer-tree
  * Insertions always go to the root
  */
-insert_ret_t BufferTree::insert(update_t upd) {
+insert_ret_t GutterTree::insert(update_t upd) {
   // printf("inserting to buffer tree . . . ");
   // root_lock.lock();
   if (root_position + serial_update_size > buffer_size) {
@@ -314,7 +314,7 @@ inline uint32_t which_child(node_id_t key, node_id_t min_key, node_id_t max_key,
  * IMPORTANT: Unless we add more flush_buffers only a single flush at each level may occur 
  * at once otherwise the data will clash
  */
-flush_ret_t BufferTree::do_flush(char *data, uint32_t data_size, uint32_t begin, 
+flush_ret_t GutterTree::do_flush(char *data, uint32_t data_size, uint32_t begin, 
   node_id_t min_key, node_id_t max_key, uint16_t options, uint8_t level) {
   // setup
   uint32_t full_flush = page_size - (page_size % serial_update_size);
@@ -369,7 +369,7 @@ flush_ret_t BufferTree::do_flush(char *data, uint32_t data_size, uint32_t begin,
   }
 }
 
-flush_ret_t inline BufferTree::flush_root() {
+flush_ret_t inline GutterTree::flush_root() {
   // printf("Flushing root\n");
   // root_lock.lock(); // TODO - we can probably reduce this locking to only the last page
   do_flush(root_node, root_position, 0, 0, num_nodes-1, fanout, 0);
@@ -377,7 +377,7 @@ flush_ret_t inline BufferTree::flush_root() {
   // root_lock.unlock();
 }
 
-flush_ret_t inline BufferTree::flush_control_block(BufferControlBlock *bcb) {
+flush_ret_t inline GutterTree::flush_control_block(BufferControlBlock *bcb) {
   // printf("flushing "); bcb->print();
   if(bcb->size() == 0) {
     return; // don't flush empty control blocks
@@ -389,7 +389,7 @@ flush_ret_t inline BufferTree::flush_control_block(BufferControlBlock *bcb) {
   return flush_internal_node(bcb);
 }
 
-flush_ret_t inline BufferTree::flush_internal_node(BufferControlBlock *bcb) {
+flush_ret_t inline GutterTree::flush_internal_node(BufferControlBlock *bcb) {
   // flushing a control block is the only time read_buffers are used
   // and we call this on the bottom level of the tree (max_level) so
   // level-1 for the read_buffers is important.
@@ -416,7 +416,7 @@ flush_ret_t inline BufferTree::flush_internal_node(BufferControlBlock *bcb) {
   bcb->reset();
 }
 
-flush_ret_t inline BufferTree::flush_leaf_node(BufferControlBlock *bcb) { 
+flush_ret_t inline GutterTree::flush_leaf_node(BufferControlBlock *bcb) { 
   uint8_t level = bcb->level;
   if (level == 1) {
     read_buffers[level-1] = cache + bcb->offset();
@@ -433,18 +433,18 @@ flush_ret_t inline BufferTree::flush_leaf_node(BufferControlBlock *bcb) {
       offset += len;
     }
   }
-  cq->push(read_buffers[level-1], bcb->size());
+  wq->push(read_buffers[level-1], bcb->size());
   bcb->reset();
 }
 
 // ask the buffer tree for data
 // this function may sleep until data is available
-bool BufferTree::get_data(data_ret_t &data) {
+bool GutterTree::get_data(data_ret_t &data) {
   File_Pointer idx = 0;
 
   // make a request to the circular buffer for data
   std::pair<int, queue_elm> queue_data;
-  bool got_data = cq->peek(queue_data);
+  bool got_data = wq->peek(queue_data);
 
   if (!got_data)
     return false; // we got no data so return not valid
@@ -455,9 +455,9 @@ bool BufferTree::get_data(data_ret_t &data) {
   uint32_t len      = elm.size;
 
   if (len == 0) {
-    cq->pop(i);
+    wq->pop(i);
     return false; // we got no data so return not valid
-        }
+  }
 
   data.second.clear(); // remove any old data from the vector
   uint32_t vec_len  = len / serial_update_size;
@@ -485,11 +485,11 @@ bool BufferTree::get_data(data_ret_t &data) {
     idx += serial_update_size;
   }
 
-  cq->pop(i); // mark the cq entry as clean
+  wq->pop(i); // mark the wq entry as clean
   return true;
 }
 
-flush_ret_t BufferTree::force_flush() {
+flush_ret_t GutterTree::force_flush() {
   // printf("Force flush\n");
   flush_root();
   // loop through each of the bufferControlBlocks and flush it
@@ -502,13 +502,13 @@ flush_ret_t BufferTree::force_flush() {
   }
 }
 
-void BufferTree::set_non_block(bool block) {
+void GutterTree::set_non_block(bool block) {
   if (block) {
-    cq->no_block = true; // circular queue operations should no longer block
-    cq->cirq_empty.notify_all();
-    cq->cirq_full.notify_all();
+    wq->no_block = true; // circular queue operations should no longer block
+    wq->cirq_empty.notify_all();
+    wq->cirq_full.notify_all();
   }
   else {
-    cq->no_block = false; // set circular queue to block if necessary
+    wq->no_block = false; // set circular queue to block if necessary
   }
 }
