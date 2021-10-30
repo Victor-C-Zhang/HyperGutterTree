@@ -201,11 +201,23 @@ void GutterTree::setup_tree() {
 
     // allocate file space for all the nodes to prevent fragmentation
   #ifdef LINUX_FALLOCATE
-    printf("fallocate file of size %lu\n", size);
     fallocate(backing_store, 0, 0, size); // linux only but fast
-  #else
-    printf("posix_fallocate file of size %lu\n", size);
-    posix_fallocate(backing_store, 0, size); // portable but much slower
+  #endif
+    #ifdef WINDOWS_FILEAPI
+    // https://stackoverflow.com/questions/455297/creating-big-file-on-windows/455302#455302
+    // TODO: implement the above
+    throw std::runtime_error("Windows is not currently supported by GutterTree");
+  #endif
+  #ifdef POSIX_FCNTL
+    // taken from https://github.com/trbs/fallocate
+    fstore_t store_options = {
+      F_ALLOCATECONTIG,
+      F_PEOFPOSMODE,
+      0,
+      static_cast<off_t>(size),
+      0
+    };
+    fcntl(backing_store, F_PREALLOCATE, &store_options);
   #endif
     
     backing_EOF = size;
