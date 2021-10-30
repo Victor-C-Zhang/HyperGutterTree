@@ -13,3 +13,14 @@ _deps
 # CLion ignores
 cmake-build-debug
 .idea
+
+# our configuration file and executables
+buffering.conf
+guttertree_experiment
+buffering_tests
+test_*
+build
+lib
+
+# Mac files
+*.DS_Store

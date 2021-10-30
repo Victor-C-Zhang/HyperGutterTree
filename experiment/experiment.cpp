@@ -1,9 +1,9 @@
 #include <gtest/gtest.h>
-#include <math.h>
 #include <thread>
 #include <chrono>
 #include <atomic>
-#include "../include/buffer_tree.h"
+#include <fstream>
+#include "../include/gutter_tree.h"
 
 #define KB (uint64_t (1 << 10))
 #define MB (uint64_t (1 << 20))
@@ -15,37 +15,47 @@ static std::atomic<uint64_t> upd_processed;
 // queries the buffer tree and verifies that the data
 // returned makes sense
 // Should be run in a seperate thread
-void querier(BufferTree *buf_tree, int nodes) {
+void querier(GutterTree *gt, int nodes) {
   data_ret_t data;
   while(true) {
-    bool valid = buf_tree->get_data(data);
-    if (valid) {
-      Node key = data.first;
-      std::vector<Node> updates = data.second;
-      // verify that the updates are all between the correct nodes
-      for (Node upd : updates) {
-        // printf("edge to %d\n", upd.first);
-        ASSERT_EQ(nodes - (key + 1), upd) << "key " << key;
-        upd_processed += 1;
-      }
+  bool valid = gt->get_data(data);
+  if (valid) {
+    Node key = data.first;
+    std::vector<Node> updates = data.second;
+    // verify that the updates are all between the correct nodes
+    for (Node upd : updates) {
+    // printf("edge to %d\n", upd.first);
+    ASSERT_EQ(nodes - (key + 1), upd) << "key " << key;
+    upd_processed += 1;
     }
-    else if(shutdown)
-      return;
+  }
+  else if(shutdown)
+    return;
   }
 }
 
-void progress(const uint64_t num_updates) {
-    while(true) {
-        sleep(5);
-        uint64_t cur = upd_processed.load();
-        printf("number of insertions processed: %lu %f%% \r", cur, cur/((double)num_updates/100));
+void write_configuration(uint32_t buffer_exp, uint32_t fanout, int queue_factor, 
+                        int page_factor, int num_threads) {
+  std::ofstream conf("./buffering.conf");
+  conf << "buffer_exp=" << buffer_exp << std::endl;
+  conf << "branch=" << fanout << std::endl;
+  conf << "queue_factor=" << queue_factor << std::endl;
+  conf << "page_factor=" << page_factor << std::endl;
+  conf << "num_threads=" << num_threads << std::endl;
+}
 
-        fflush(stdout);
-        if (upd_processed == num_updates) {
-            printf("number of insertions processed: DONE         \n");
-            break;
-        }
+void progress(const uint64_t num_updates) {
+  while(true) {
+    sleep(5);
+    uint64_t cur = upd_processed.load();
+    printf("number of insertions processed: %lu %f%% \r", cur, cur/((double)num_updates/100));
+    fflush(stdout);
+
+    if (upd_processed == num_updates) {
+      printf("number of insertions processed: DONE         \n");
+      break;
     }
+  }
 }
 
 // helper function to run a basic test of the buffer tree with
@@ -53,87 +63,91 @@ void progress(const uint64_t num_updates) {
 // this test only works if the depth of the tree does not exceed 1
 // and no work is claimed off of the work queue
 // to work correctly num_updates must be a multiple of nodes
-void run_test(const int nodes, const uint64_t num_updates, const uint64_t buffer_size, 
- const int branch_factor, const int threads=1) {
-    printf("Running Test: nodes=%i num_updates=%lu buffer_size %lu branch_factor %i\n",
-         nodes, num_updates, buffer_size, branch_factor);
+void run_test(const int nodes, const uint64_t num_updates, const uint64_t buffer_exp, 
+ const int branch_factor, const int threads=1, const int flushers=1) {
+  printf("Running Test: nodes=%i num_updates=%lu buffer_size 2^%lu branch_factor %i\n",
+     nodes, num_updates, buffer_exp, branch_factor);
 
-    BufferTree *buf_tree = new BufferTree("experiment_", buffer_size, branch_factor, nodes, 2, threads, 16, true);
-    shutdown = false;
-    upd_processed = 0;
+  write_configuration(buffer_exp, branch_factor, 16, 5, flushers); //16=queue_factor, 5=page_factor
 
-    std::thread query_threads[threads];
-    for (int t = 0; t < threads; t++) {
-        query_threads[t] = std::thread(querier, buf_tree, nodes);
-    }
-    std::thread progress_thr(progress, num_updates);
+  GutterTree *gt = new GutterTree("./test_", nodes, threads, true);
+  shutdown = false;
+  upd_processed = 0;
 
-    auto start = std::chrono::steady_clock::now();
-    for (uint64_t i = 0; i < num_updates; i++) {
-        update_t upd;
-        upd.first = i % nodes;
-        upd.second = (nodes - 1) - (i % nodes);
-        buf_tree->insert(upd);
-    }
-    std::chrono::duration<double> delta = std::chrono::steady_clock::now() - start;
-    printf("insertions took %f seconds: average rate = %f\n", delta.count(), num_updates/delta.count());
-    buf_tree->force_flush();
-    shutdown = true;
-    buf_tree->set_non_block(true); // tell any waiting threads to reset
+  std::thread query_threads[threads];
+  for (int t = 0; t < threads; t++) {
+    query_threads[t] = std::thread(querier, gt, nodes);
+  }
+  std::thread progress_thr(progress, num_updates);
 
-    delta = std::chrono::steady_clock::now() - start;
-    printf("insert+force_flush took %f seconds: average rate = %f\n", delta.count(), num_updates/delta.count());
+  auto start = std::chrono::steady_clock::now();
+  for (uint64_t i = 0; i < num_updates; i++) {
+    update_t upd;
+    upd.first = i % nodes;
+    upd.second = (nodes - 1) - (i % nodes);
+    gt->insert(upd);
+  }
+  std::chrono::duration<double> delta = std::chrono::steady_clock::now() - start;
+  printf("insertions took %f seconds: average rate = %f\n", delta.count(), num_updates/delta.count());
+  gt->force_flush();
+  shutdown = true;
+  gt->set_non_block(true); // tell any waiting threads to reset
 
-    for (int t = 0; t < threads; t++) {
-        query_threads[t].join();
-    }
-    progress_thr.join();
-    delete buf_tree;
+  delta = std::chrono::steady_clock::now() - start;
+  printf("insert+force_flush took %f seconds: average rate = %f\n", delta.count(), num_updates/delta.count());
+
+  for (int t = 0; t < threads; t++) {
+    query_threads[t].join();
+  }
+  progress_thr.join();
+  delete gt;
 }
 
 TEST(Experiment, LargeStandard) {
-    const int nodes            = 512;
-    const uint64_t num_updates = MB << 5;
-    const uint64_t buf         = MB;
-    const int branch           = 8;
+  const int nodes            = 512;
+  const uint64_t num_updates = MB << 5;
+  const uint64_t buf_exp     = 20;
+  const int branch           = 8;
 
-    run_test(nodes, num_updates, buf, branch);
+  run_test(nodes, num_updates, buf_exp, branch);
 }
 
 TEST(Experiment, LargeWide) {
-    const int nodes            = 512;
-    const uint64_t num_updates = MB << 5;
-    const uint64_t buf         = MB;
-    const int branch           = 16;
+  const int nodes            = 512;
+  const uint64_t num_updates = MB << 5;
+  const uint64_t buf_exp     = 20;
+  const int branch           = 16;
 
-    run_test(nodes, num_updates, buf, branch);
+  run_test(nodes, num_updates, buf_exp, branch);
 }
 
 TEST(Experiment, ExtraLarge) {
-    const int nodes            = 1024;
-    const uint64_t num_updates = MB << 8;
-    const uint64_t buf         = MB << 1;
-    const int branch           = 16;
+  const int nodes            = 1024;
+  const uint64_t num_updates = MB << 8;
+  const uint64_t buf_exp     = 21;
+  const int branch           = 16;
 
-    run_test(nodes, num_updates, buf, branch);
+  run_test(nodes, num_updates, buf_exp, branch);
 }
 
 TEST(SteadyState, HugeExperiment) {
-    const int nodes            = 262144;
-    const uint64_t num_updates = GB << 2; // 4 billion
-    const uint64_t buf         = MB << 3;
-    const int branch           = 64;
-    const int threads          = 10;
+  const int nodes            = 262144;
+  const uint64_t num_updates = GB << 2; // 4 billion
+  const uint64_t buf_exp     = 23;
+  const int branch           = 64;
+  const int threads          = 10;
+  const int flushers         = 1;
 
-    run_test(nodes, num_updates, buf, branch, threads);
+  run_test(nodes, num_updates, buf_exp, branch, threads, flushers);
 }
 
 TEST(SteadyState, BigFanoutExperiment) {
-    const int nodes            = 262144;
-    const uint64_t num_updates = GB << 2; // 4 billion
-    const uint64_t buf         = MB << 3;
-    const int branch           = 512;
-    const int threads          = 10;
+  const int nodes            = 262144;
+  const uint64_t num_updates = GB << 2; // 4 billion
+  const uint64_t buf_exp     = 23;
+  const int branch           = 512;
+  const int threads          = 10;
+  const int flushers         = 1;
 
-    run_test(nodes, num_updates, buf, branch, threads);
+  run_test(nodes, num_updates, buf_exp, branch, threads, flushers);
 }

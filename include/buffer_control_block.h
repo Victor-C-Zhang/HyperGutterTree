@@ -1,19 +1,14 @@
-//
-// Created by victor on 3/2/21.
-//
-
-#ifndef FASTBUFFERTREE_BUFFER_CONTROL_BLOCK_H
-#define FASTBUFFERTREE_BUFFER_CONTROL_BLOCK_H
-
-
+#pragma once
 #include <cstdint>
 #include <string>
 #include <mutex>
 #include <condition_variable>
-#include "update.h"
+#include "types.h"
 
 typedef uint32_t buffer_id_t;
 typedef uint64_t File_Pointer;
+
+class GutterTree;
 
 /**
  * Buffer metadata class. Care should be taken to synchronize access to the
@@ -33,12 +28,14 @@ private:
   File_Pointer file_offset;
 
   /*
-   * Check if this buffer needs a flush. 
-   * In the case of leaf nodes this returns true if the leaf has a new sketch sized buffer ready
-   * @param size   the size of the write
-   * @return       true if buffer needs a flush
+   * Check if this buffer needs a flush or if the current write will overflow
+   * @param size            the size of the current write
+   * @param flush_size      if the buffer will be at least this full then we need to flush
+   * @param max_size        if the buffer will be at least this full that would cause overflow
+   * @return true           if buffer needs a flush, false if not
+   * @throw BufferFullError if the write will overflow the buffer size.
    */
-  bool needs_flush(uint32_t size);
+  bool check_size_limit(uint32_t size, uint32_t flush_size, uint32_t max_size);
 
   // lock for controlling read/write access to the buffer
   std::mutex RW_lock;
@@ -65,31 +62,26 @@ public:
 
   /*
    * Write to the buffer managed by this metadata.
+   * @param the buffer tree this control block is a part of
    * @param data the data to write
    * @param size the size in bytes of the data to write
    * @return true if buffer needs flush and false otherwise
    */
-  bool write(char *data, uint32_t size);
+  bool write(GutterTree *bf, char *data, uint32_t size);
 
   // synchronization functions. Should be called when root buffers are read or written to.
   // Other buffers should not require synchronization
-  void lock() {RW_lock.lock();}
+  void lock()   {RW_lock.lock();}
   void unlock() {RW_lock.unlock();}
 
   void validate_write(char *data, uint32_t size);
 
-  /*
-   * Flush the buffer this block controls
-   * @return nothing
-   */
-  void flush();
-
-  inline bool is_leaf()  {return min_key == max_key;}
-
+  inline bool is_leaf()                     {return min_key == max_key;}
   inline void set_size(File_Pointer npos=0) {storage_ptr = npos;}
-  inline buffer_id_t get_id() {return id;}
-  inline File_Pointer size() {return storage_ptr;}
-  inline File_Pointer offset() {return file_offset;}
+  inline buffer_id_t get_id()               {return id;}
+  inline File_Pointer size()                {return storage_ptr;}
+  inline File_Pointer offset()              {return file_offset;}
+
   inline void add_child(buffer_id_t child) {
     children_num++;
     first_child = (first_child == 0)? child : first_child;
@@ -115,5 +107,3 @@ public:
     return temp.c_str();
   }
 };
-
-#endif //FASTBUFFERTREE_BUFFER_CONTROL_BLOCK_H

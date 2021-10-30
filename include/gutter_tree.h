@@ -1,15 +1,14 @@
-#ifndef FASTBUFFERTREE_BUFFER_TREE_H
-#define FASTBUFFERTREE_BUFFER_TREE_H
-
+#pragma once
 #include <cstdint>
 #include <string>
 #include <vector>
 #include <queue>
 #include <mutex>
 #include <math.h>
-#include "update.h"
+#include "types.h"
 #include "buffer_control_block.h"
-#include "circular_queue.h"
+#include "work_queue.h"
+#include "buffering_system.h"
 
 typedef void insert_ret_t;
 typedef void flush_ret_t;
@@ -17,34 +16,14 @@ typedef std::pair<Node, std::vector<Node>> data_ret_t;
 
 class BufferFlusher;
 struct flush_struct;
+
 /*
- * Quick and dirty buffer tree skeleton.
- * Metadata about buffers (buffer control blocks) will be stored in memory.
- * The root buffer will be stored in memory.
- * All other buffers will be primarily stored on disk.
- * The tree operates read-lazily, only reading (non-root) buffers into memory
- *    if they need to be flushed.
- * Flushing and flush-related work is handled by a dynamic thread pool.
- * A flush queue will be maintained, from which threads pick tasks.
- * DESIGN NOTE: Currently, a buffer cannot flush to another buffer that needs to
- * be flushed. This is to prevent starvation.
+ * Structure of the GutterTree
  */
-class BufferTree {
+class GutterTree : public BufferingSystem {
 private:
   // root directory of tree
   std::string dir;
-
-  // size of a buffer (leaf buffers will likely be smaller)
-  uint32_t M;
-
-  // branching factor
-  uint32_t B;
-
-  // number of nodes in the graph
-  node_id_t N;
-
-  // the quantity of flushers
-  int num_flushers;
 
   // memory for flushing
   flush_struct *flush_data;
@@ -54,6 +33,17 @@ private:
    */
   flush_ret_t flush_internal_node(flush_struct &flush_from, BufferControlBlock *bcb);
   flush_ret_t flush_leaf_node(flush_struct &flush_from, BufferControlBlock *bcb);
+
+  /**
+  * Use buffering.conf configuration file to determine parameters of the GutterTree
+  * Sets the following variables
+  * Buffer_Size  :   The size of the root buffer
+  * Fanout       :   The maximum number of children per internal node
+  * Queue_Factor :   The number of queue slots per worker removing data from the queue
+  * Page_Factor  :   Multiply system page size by this number to get our write granularity
+  * Num_Flushers :   The number of flush threads to use for async flushing.
+  */
+  void configure_tree();
 
   /*
    * function which actually carries out the flush. Designed to be
@@ -70,8 +60,31 @@ private:
   flush_ret_t do_flush(flush_struct &flush_from, uint32_t size, uint32_t begin, 
     node_id_t min_key, node_id_t max_key, uint16_t options, uint8_t level);
 
-  // Circular queue in which we place leaves that fill up
-  CircularQueue *cq;
+  // Work queue in which we place leaves that fill up
+  WorkQueue *wq;
+
+  flush_ret_t flush_control_block(BufferControlBlock *bcb);
+  flush_ret_t flush_internal_node(BufferControlBlock *bcb);
+  flush_ret_t flush_leaf_node(BufferControlBlock *bcb);
+
+  /*
+   * Variables which track universal information about the buffer tree which
+   * we would like to be accesible to all the bufferControlBlocks
+   */
+  uint32_t page_size;    // write granularity
+  uint8_t  max_level;    // max depth of the tree
+  uint32_t buffer_size;  // size of an internal node buffer
+  uint32_t fanout;       // maximum number of children per node
+  uint32_t num_nodes;    // number of unique ids to buffer
+  uint64_t backing_EOF;  // file to write tree to
+  uint64_t leaf_size;    // size of a leaf buffer
+  uint32_t queue_factor; // number of elements in queue is this factor * num_workers
+  uint32_t num_flushers; // the number of flush threads
+
+  //File descriptor of backing file for storage
+  int backing_store;
+  // a chunk of memory we reserve to cache the first level of the buffer tree
+  char *cache;
 
   // Buffer Flusher threads
   BufferFlusher **flushers;
@@ -79,20 +92,15 @@ private:
 public:
   /**
    * Generates a new homebrew buffer tree.
-   * @param dir           file path of the data structure root directory, relative to
-   *                      the executing workspace.
-   * @param size          the minimum length of one buffer, in updates. Should be
-   *                      larger than the branching factor. not guaranteed to be
-   *                      the true buffer size, which can be between size and 2*size.
-   * @param b             branching factor.
-   * @param nodes         number of nodes in the graph
-   * @param nf            the number of threads to use for flushing
-   * @param workers       the number of workers which will be using this buffer tree (defaults to 1)
-   * @param queue_factor  the factor we multiply by workers to get number of queue slots
-   * @param reset         should truncate the file storage upon opening
+   * @param dir     file path of the data structure root directory, relative to
+   *                the executing workspace.
+   * @param nodes   number of nodes in the graph
+   * @param workers the number of workers which will be using this buffer tree (defaults to 1)
+   * @param reset   should truncate the file storage upon opening
    */
-  BufferTree(std::string dir, uint32_t size, uint32_t b, node_id_t nodes, int nf, int workers, int queue_factor, bool reset);
-  ~BufferTree();
+  GutterTree(std::string dir, node_id_t nodes, int workers, bool reset);
+  ~GutterTree();
+
   /**
    * Puts an update into the data structure.
    * @param upd the edge update.
@@ -112,6 +120,8 @@ public:
    * @return nothing.
    */
   flush_ret_t force_flush();
+
+  // Functions for flushing bcbs or subtrees of the graph
   flush_ret_t flush_subtree(flush_struct &flush_from, buffer_id_t first_child);
   flush_ret_t flush_control_block(flush_struct &flush_from, BufferControlBlock *bcb);
 
@@ -119,8 +129,8 @@ public:
    * Notifies all threads waiting on condition variables that 
    * they should check their wait condition again
    * Useful when switching from blocking to non-blocking calls
-   * to the circular queue
-   * For example: we set this to true when shutting down the graph_workers
+   * to the work queue
+   * For example: we set this to true when shutting down workers
    * @param    block is true if we should turn on non-blocking operations
    *           and false if we should turn them off
    * @return   nothing
@@ -168,22 +178,59 @@ public:
   std::vector<BufferControlBlock*> buffers;
 
   /*
-   * Static variables which track universal information about the buffer tree which
-   * we would like to be accesible to all the bufferControlBlocks
+   * A bunch of functions for accessing buffer tree variables
    */
-  static uint32_t page_size;
-  static const uint32_t serial_update_size = sizeof(node_id_t) + sizeof(node_id_t);
-  static uint8_t max_level;
-  static uint32_t buffer_size;
-  static uint32_t branch_factor;
-  static uint64_t backing_EOF;
-  static uint64_t leaf_size;
-  /*
-   * File descriptor of backing file for storage
-   */
-  static int backing_store;
-  // a chunk of memory we reserve to cache the first level of the buffer tree
-  static char *cache;
+  inline uint32_t get_page_size()    { return page_size; };
+  inline uint8_t  get_max_level()    { return max_level; };
+  inline uint32_t get_buffer_size()  { return buffer_size; };
+  inline uint64_t get_leaf_size()    { return leaf_size; };
+  inline uint32_t get_fanout()       { return fanout; };
+  inline uint32_t get_num_nodes()    { return num_nodes; };
+  inline uint64_t get_file_size()    { return backing_EOF; };
+  inline uint32_t get_queue_factor() { return queue_factor; };
+
+  inline int get_fd()       { return backing_store; };
+  inline char * get_cache() { return cache; };
+
+  static const uint32_t serial_update_size = sizeof(node_id_t) + sizeof(node_id_t); // size in bytes of an update
+};
+
+struct flush_struct {
+  char ***flush_buffers;
+  char ***flush_positions;
+  char  **read_buffers;
+
+  uint32_t max_level;
+  uint32_t fanout;
+
+  flush_struct(GutterTree *gt) : max_level(gt->get_max_level()), fanout(gt->get_fanout()) {
+    // malloc the memory used when flushing
+    flush_buffers   = (char ***) malloc(sizeof(char **) * max_level);
+    flush_positions = (char ***) malloc(sizeof(char **) * max_level);
+    read_buffers    = (char **)  malloc(sizeof(char *)  * max_level);
+    for (unsigned l = 0; l < max_level; l++) {
+      flush_buffers[l]   = (char **) malloc(sizeof(char *) * fanout);
+      flush_positions[l] = (char **) malloc(sizeof(char *) * fanout);
+      read_buffers[l]    = (char *) malloc(sizeof(char) * (gt->get_buffer_size() + gt->get_page_size()));
+      for (unsigned i = 0; i < fanout; i++) {
+        flush_buffers[l][i] = (char *) calloc(gt->get_page_size(), sizeof(char));
+      }
+    }
+  }
+  
+  ~flush_struct() {
+    for(unsigned l = 0; l < max_level; l++) {
+      free(flush_positions[l]);
+      free(read_buffers[l]);
+      for (unsigned i = 0; i < fanout; i++) {
+        free(flush_buffers[l][i]);
+      }
+      free(flush_buffers[l]);
+    }
+    free(flush_buffers);
+    free(flush_positions);
+    free(read_buffers);
+  }
 };
 
 class BufferFullError : public std::exception {
@@ -205,42 +252,3 @@ public:
     return "The key was not correct for the associated buffer";
   }
 };
-
-struct flush_struct {
-  char ***flush_buffers;
-  char ***flush_positions;
-  char  **read_buffers;
-
-  flush_struct() {
-    // malloc the memory used when flushing
-    flush_buffers   = (char ***) malloc(sizeof(char **) * BufferTree::max_level);
-    flush_positions = (char ***) malloc(sizeof(char **) * BufferTree::max_level);
-    read_buffers    = (char **)  malloc(sizeof(char *)  * BufferTree::max_level);
-    for (int l = 0; l < BufferTree::max_level; l++) {
-      flush_buffers[l]   = (char **) malloc(sizeof(char *) * BufferTree::branch_factor);
-      flush_positions[l] = (char **) malloc(sizeof(char *) * BufferTree::branch_factor);
-      read_buffers[l]    = (char *) malloc(sizeof(char) * (BufferTree::buffer_size + BufferTree::page_size));
-      for (uint i = 0; i < BufferTree::branch_factor; i++) {
-        flush_buffers[l][i] = (char *) calloc(BufferTree::page_size, sizeof(char));
-      }
-    }
-  }
-  
-  ~flush_struct() {
-    for(int l = 0; l < BufferTree::max_level; l++) {
-      free(flush_positions[l]);
-      free(read_buffers[l]);
-      for (uint16_t i = 0; i < BufferTree::branch_factor; i++) {
-        free(flush_buffers[l][i]);
-      }
-      free(flush_buffers[l]);
-    }
-    free(flush_buffers);
-    free(flush_positions);
-    free(read_buffers);
-  }
-};
-
-
-
-#endif //FASTBUFFERTREE_BUFFER_TREE_H
