@@ -45,10 +45,8 @@ public:
   void pop(int i);
 
   std::condition_variable wq_full;
-  std::mutex write_lock;
-
   std::condition_variable wq_empty;
-  std::mutex read_lock;
+  std::mutex rw_lock;
 
   // should WorkQueue peeks wait until they can succeed(false)
   // or return false on failure (true)
