@@ -7,27 +7,23 @@ uint32_t StandAloneGutters::queue_factor;
 uint32_t StandAloneGutters::gutter_factor;
 const unsigned first_idx = 2;
 
-StandAloneGutters::StandAloneGutters(Node num_nodes, int workers) :
+StandAloneGutters::StandAloneGutters(node_id_t num_nodes, int workers) :
 buffers(num_nodes) {
   configure(); // read buffering configuration file
 
-  uint32_t bytes_size = floor(24 * pow(log2(num_nodes), 3)); // size of leaf proportional to size of sketch
-  bytes_size   = (bytes_size % serial_update_size == 0)? bytes_size : bytes_size + serial_update_size - bytes_size % serial_update_size;
+  uint32_t bytes_size = floor(42 * sizeof(node_id_t) * pow(log2(num_nodes), 2)); // size of leaf proportional to size of sketch
   buffer_size = bytes_size / sizeof(node_id_t);
 
   wq = new WorkQueue(workers * queue_factor, bytes_size);
 
-  for (Node i = 0; i < num_nodes; ++i) {
-    buffers[i] = static_cast<node_id_t *>(malloc(bytes_size));
-    buffers[i][0] = first_idx; // first spot will point to the next free space
-    buffers[i][1] = i; // second spot identifies the node to which the buffer
+  for (node_id_t i = 0; i < num_nodes; ++i) {
+    buffers[i].reserve(buffer_size);
+    buffers[i].push_back(first_idx); // first spot will point to the next free space
+    buffers[i].push_back(i); // second spot identifies the node to which the buffer
   }
 }
 
 StandAloneGutters::~StandAloneGutters() {
-  for (auto & buffer : buffers) {
-    free(buffer);
-  }
   delete wq;
 }
 
@@ -67,13 +63,16 @@ void StandAloneGutters::flush(node_id_t *buffer, uint32_t num_bytes) {
   wq->push(reinterpret_cast<char *>(buffer), num_bytes);
 }
 
-insert_ret_t StandAloneGutters::insert(update_t upd) {
-  node_id_t& idx = buffers[upd.first][0];
-  buffers[upd.first][idx] = (node_id_t) upd.second;
-  ++idx;
-  if (idx == buffer_size) { // full, so request flush
-    flush(buffers[upd.first], buffer_size*sizeof(node_id_t));
-    idx = first_idx;
+insert_ret_t StandAloneGutters::insert(const update_t &upd) {
+  std::vector<node_id_t> &ptr = buffers[upd.first];
+  ptr.emplace_back(upd.second);
+  if (ptr.size() == buffer_size) { // full, so request flush
+    ptr[0] = buffer_size;
+    flush(ptr.data(), buffer_size*sizeof(node_id_t));
+    Node i = ptr[1];
+    ptr.clear();
+    ptr.push_back(first_idx);
+    ptr.push_back(i);
   }
 }
 
@@ -113,9 +112,13 @@ bool StandAloneGutters::get_data(data_ret_t &data) {
 
 flush_ret_t StandAloneGutters::force_flush() {
   for (auto & buffer : buffers) {
-    if (buffer[0] != first_idx) { // have stuff to flush
-      flush(buffer, buffer[0]*sizeof(node_id_t));
-      buffer[0] = first_idx;
+    if (buffer.size() != first_idx) { // have stuff to flush
+      buffer[0] = buffer.size();
+      flush(buffer.data(), buffer[0]*sizeof(node_id_t));
+      Node i = buffer[1];
+      buffer.clear();
+      buffer.push_back(0);
+      buffer.push_back(i);
     }
   }
 }

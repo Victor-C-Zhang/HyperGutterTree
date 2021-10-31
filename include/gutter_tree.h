@@ -106,7 +106,7 @@ public:
    * @param upd the edge update.
    * @return nothing.
    */
-  insert_ret_t insert(update_t upd);
+  insert_ret_t insert(const update_t &upd);
 
   /*
    * Ask the buffer tree for data and sleep if necessary until it is available.

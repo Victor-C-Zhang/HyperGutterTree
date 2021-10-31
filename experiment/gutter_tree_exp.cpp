@@ -103,7 +103,7 @@ void run_test(const int nodes, const uint64_t num_updates, const uint64_t buffer
   delete gt;
 }
 
-TEST(Experiment, LargeStandard) {
+TEST(GutterTree, LargeStandard) {
   const int nodes            = 512;
   const uint64_t num_updates = MB << 5;
   const uint64_t buf_exp     = 20;
@@ -112,7 +112,7 @@ TEST(Experiment, LargeStandard) {
   run_test(nodes, num_updates, buf_exp, branch);
 }
 
-TEST(Experiment, LargeWide) {
+TEST(GutterTree, LargeWide) {
   const int nodes            = 512;
   const uint64_t num_updates = MB << 5;
   const uint64_t buf_exp     = 20;
@@ -121,7 +121,7 @@ TEST(Experiment, LargeWide) {
   run_test(nodes, num_updates, buf_exp, branch);
 }
 
-TEST(Experiment, ExtraLarge) {
+TEST(GutterTree, ExtraLarge) {
   const int nodes            = 1024;
   const uint64_t num_updates = MB << 8;
   const uint64_t buf_exp     = 21;
@@ -130,7 +130,7 @@ TEST(Experiment, ExtraLarge) {
   run_test(nodes, num_updates, buf_exp, branch);
 }
 
-TEST(SteadyState, HugeExperiment) {
+TEST(GT_Thoughput, HugeExperiment) {
   const int nodes            = 262144;
   const uint64_t num_updates = GB << 2; // 4 billion
   const uint64_t buf_exp     = 23;
@@ -141,7 +141,7 @@ TEST(SteadyState, HugeExperiment) {
   run_test(nodes, num_updates, buf_exp, branch, threads, flushers);
 }
 
-TEST(SteadyState, BigFanoutExperiment) {
+TEST(GT_Thoughput, BigFanoutExperiment) {
   const int nodes            = 262144;
   const uint64_t num_updates = GB << 2; // 4 billion
   const uint64_t buf_exp     = 23;

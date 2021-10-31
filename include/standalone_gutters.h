@@ -10,8 +10,8 @@ class StandAloneGutters : public BufferingSystem {
 private:
   uint32_t buffer_size; // size of a buffer (including metadata)
   WorkQueue *wq;
-  std::vector<node_id_t*> buffers; // array dump of numbers for performance: DO NOT
-  // try to access directly!
+  std::vector<std::vector<node_id_t>> buffers; // array dump of numbers for performance:
+                                               // DO NOT try to access directly!
 
   /**
    * Flushes the corresponding buffer to the queue.
@@ -34,7 +34,7 @@ public:
    * @param nodes       number of nodes in the graph.
    * @param workers     the number of workers which will be removing batches
    */
-  StandAloneGutters(Node nodes, int workers);
+  StandAloneGutters(node_id_t nodes, int workers);
 
   ~StandAloneGutters();
 
@@ -43,7 +43,7 @@ public:
    * @param upd the edge update.
    * @return nothing.
    */
-  insert_ret_t insert(update_t upd);
+  insert_ret_t insert(const update_t &upd);
 
   /**
    * Ask the buffer queue for data and sleep if necessary until it is available.

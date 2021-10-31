@@ -7,7 +7,7 @@ set(CMAKE_CXX_EXTENSIONS ON)
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${PROJECT_BINARY_DIR}/lib)
 
 #Uncomment to enable debug
-#set(ENV{DEBUG} ON)
+set(ENV{DEBUG} ON)
 
 if("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU")
   message("Adding GNU compiler flags")
@@ -119,19 +119,20 @@ else ()
   endif()
 endif ()
 
-add_executable(guttertree_experiment
+add_executable(buffering_experiment
   experiment/runner.cpp
-  experiment/experiment.cpp)
-target_link_libraries(guttertree_experiment PRIVATE GTest::gtest GutterTree)
+  experiment/gutter_tree_exp.cpp
+  experiment/standalone_exp.cpp)
+target_link_libraries(buffering_experiment PRIVATE GTest::gtest GutterTree)
 # optimize unless debug
 if (DEFINED ENV{DEBUG})
   message("Disabling optimizations and enabling debug symbols")
-  target_compile_options(guttertree_experiment PRIVATE -g)
+  target_compile_options(buffering_experiment PRIVATE -g)
 else ()
   if("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU" OR "${CMAKE_CXX_COMPILER_ID}" STREQUAL "AppleClang")
-    target_compile_options(guttertree_experiment PRIVATE -O3)
+    target_compile_options(buffering_experiment PRIVATE -O3)
   elseif("${CMAKE_CXX_COMPILER_ID}" STREQUAL "MSVC")
-    target_compile_options(guttertree_experiment PRIVATE /O2)
+    target_compile_options(buffering_experiment PRIVATE /O2)
   endif()
 endif ()
 

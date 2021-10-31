@@ -276,7 +276,7 @@ inline uint32_t which_child(node_id_t key, node_id_t min_key, node_id_t max_key,
  * Perform an insertion to the buffer-tree
  * Insertions always go to the root
  */
-insert_ret_t GutterTree::insert(update_t upd) {
+insert_ret_t GutterTree::insert(const update_t &upd) {
   // printf("inserting to gutter_tree . . . \n");
   
   // first calculate which of the roots we're inserting to
