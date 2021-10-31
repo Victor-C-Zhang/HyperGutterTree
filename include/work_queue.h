@@ -2,12 +2,13 @@
 #include <condition_variable>
 #include <mutex>
 #include <utility>
+#include <atomic>
 
 struct queue_elm {
-  volatile bool dirty;    // is this queue element yet to be processed by sketching (if so do not overwrite)
-  volatile bool touched;  // have we peeked at this item (if so do not peek it again)
-  volatile uint32_t size; // the size of this data element (in bytes)
-  char *data;             // a pointer to the data
+  bool dirty;      // is this queue element yet to be processed by sketching (if so do not overwrite)
+  bool touched;    // have we peeked at this item (if so do not peek it again)
+  uint32_t size;   // the size of this data element (in bytes)
+  char *data;      // a pointer to the data
 };
 
 /*
@@ -43,15 +44,15 @@ public:
    */
   void pop(int i);
 
-  std::condition_variable cirq_full;
+  std::condition_variable wq_full;
   std::mutex write_lock;
 
-  std::condition_variable cirq_empty;
+  std::condition_variable wq_empty;
   std::mutex read_lock;
 
   // should WorkQueue peeks wait until they can succeed(false)
   // or return false on failure (true)
-  volatile bool no_block;
+  std::atomic<bool> no_block;
 
   /*
    * Function which prints the work queue
@@ -64,8 +65,8 @@ public:
   // if place to read from is clean and has not been peeked already then queue is empty
   inline bool empty()    {return !queue_array[tail].dirty || queue_array[tail].touched;}
 private:
-  int64_t len;      // maximum number of data elements to be stored in the queue
-  int64_t elm_size; // size of an individual element in bytes
+  int32_t len;      // maximum number of data elements to be stored in the queue
+  int32_t elm_size; // size of an individual element in bytes
 
   int head;     // where to push (starts at 0, write pointer)
   int tail;     // where to peek (starts at 0, read pointer)

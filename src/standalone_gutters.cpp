@@ -123,7 +123,7 @@ flush_ret_t StandAloneGutters::force_flush() {
 void StandAloneGutters::set_non_block(bool block) {
   if (block) {
     wq->no_block = true; // circular queue operations should no longer block
-    wq->cirq_empty.notify_all();
+    wq->wq_empty.notify_all();
   } else {
     wq->no_block = false; // set circular queue to block if necessary
   }

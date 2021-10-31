@@ -577,8 +577,8 @@ flush_ret_t GutterTree::force_flush() {
 void GutterTree::set_non_block(bool block) {
   if (block) {
     wq->no_block = true; // circular queue operations should no longer block
-    wq->cirq_empty.notify_all();
-    wq->cirq_full.notify_all();
+    wq->wq_empty.notify_all();
+    wq->wq_full.notify_all();
   }
   else {
     wq->no_block = false; // set circular queue to block if necessary
