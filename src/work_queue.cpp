@@ -36,7 +36,7 @@ void WorkQueue::push(char *elm, int size) {
   }
 
   while(true) {
-    std::unique_lock<std::mutex> lk(write_lock);
+    std::unique_lock<std::mutex> lk(rw_lock);
     // printf("WQ: push: wait on not-full. full() = %s\n", (full())? "true" : "false");
     wq_full.wait_for(lk, std::chrono::milliseconds(500), [this]{return !full();});
     if(!full()) {
@@ -54,7 +54,7 @@ void WorkQueue::push(char *elm, int size) {
 
 bool WorkQueue::peek(std::pair<int, queue_elm> &ret) {
   do {
-    std::unique_lock<std::mutex> lk(read_lock);
+    std::unique_lock<std::mutex> lk(rw_lock);
     wq_empty.wait_for(lk, std::chrono::milliseconds(500), [this]{return (!empty() || no_block);});
     if(!empty()) {
       int temp = tail;
@@ -72,10 +72,10 @@ bool WorkQueue::peek(std::pair<int, queue_elm> &ret) {
 }
 
 void WorkQueue::pop(int i) {
-  write_lock.lock();
+  rw_lock.lock();
   queue_array[i].dirty   = false; // this data has been processed and this slot may now be overwritten
   queue_array[i].touched = false; // may read this slot
-  write_lock.unlock();
+  rw_lock.unlock();
   wq_full.notify_one();
 }
 
