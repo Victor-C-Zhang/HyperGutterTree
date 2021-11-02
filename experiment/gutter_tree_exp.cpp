@@ -70,7 +70,7 @@ void run_test(const int nodes, const uint64_t num_updates, const uint64_t buffer
 
   write_configuration(buffer_exp, branch_factor, 16, 5, flushers); //16=queue_factor, 5=page_factor
 
-  GutterTree *gt = new GutterTree("./test_", nodes, threads, true);
+  GutterTree *gt = new GutterTree("/mnt/ssd1/test_", nodes, threads, true);
   shutdown = false;
   upd_processed = 0;
 
