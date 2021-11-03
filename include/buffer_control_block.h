@@ -40,6 +40,9 @@ private:
   // lock for controlling read/write access to the buffer
   std::mutex RW_lock;
 
+  // lock for controlling flushing this block and its sub-tree
+  std::mutex flush_lock;
+
 public:
   // this node's level in the tree. 0 is root, 1 is it's children, etc
   uint8_t level;
@@ -71,8 +74,13 @@ public:
 
   // synchronization functions. Should be called when root buffers are read or written to.
   // Other buffers should not require synchronization
-  void lock()   {RW_lock.lock();}
-  void unlock() {RW_lock.unlock();}
+  // We keep two locks to allow writes to root to happen while flushing
+  // but need to enforce that flushes are done sequentially
+  void lock_flush()   {RW_lock.lock(); flush_lock.lock();}
+  void unlock_flush() {flush_lock.unlock();} // call unlock_rw first
+
+  void lock_rw()   {RW_lock.lock();}
+  void unlock_rw() {RW_lock.unlock();}
 
   void validate_write(char *data, uint32_t size);
 

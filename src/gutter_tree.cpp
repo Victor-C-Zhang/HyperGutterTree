@@ -26,7 +26,9 @@ GutterTree::GutterTree(std::string dir, node_id_t nodes, int workers, bool reset
   // setup universal variables
   max_level       = ceil(log(num_nodes) / log(fanout));
   backing_EOF     = 0;
-  leaf_size       = floor(42 * sizeof(node_id_t) * pow(log2(num_nodes), 2)); // size of leaf proportional to size of sketch
+
+  // leaf size should be proportional to a sketch
+  leaf_size       = floor(gutter_factor * sketch_size(num_nodes));
   leaf_size       = (leaf_size % serial_update_size == 0)? leaf_size : leaf_size + serial_update_size - leaf_size % serial_update_size;
 
   // create memory for cache and flushing
@@ -87,6 +89,7 @@ void GutterTree::configure_tree() {
   int queue_f          = 2;
   int page_factor      = 1;
   int n_fushers        = 1;
+  float gutter_f       = 1;
   std::string line;
   std::ifstream conf("./buffering.conf");
   if (conf.is_open()) {
@@ -127,6 +130,13 @@ void GutterTree::configure_tree() {
           n_fushers = 1;
         }
       }
+      if(line.substr(0, line.find('=')) == "gutter_factor") {
+        gutter_f = std::stof(line.substr(line.find('=') + 1));
+        if (gutter_f < 1 && gutter_f > -1) {
+          printf("WARNING: gutter_factor must be outside of range -1 < x < 1 using default(1)\n");
+          gutter_f = 1;
+        }
+      }
     }
   } else {
     printf("WARNING: Could not open buffering configuration file! Using default setttings.\n");
@@ -137,6 +147,10 @@ void GutterTree::configure_tree() {
   num_flushers = n_fushers;
   page_size = page_factor * sysconf(_SC_PAGE_SIZE); // works on POSIX systems (alternative is boost)
   // Windows may need https://docs.microsoft.com/en-us/windows/win32/api/sysinfoapi/nf-sysinfoapi-getnativesysteminfo?redirectedfrom=MSDN
+
+  gutter_factor = gutter_f;
+  if (gutter_factor < 0)
+    gutter_factor = 1 / (-1 * gutter_factor); // gutter factor reduces size if negative
 }
 
 void print_tree(std::vector<BufferControlBlock *>bcb_list) {
@@ -291,7 +305,7 @@ insert_ret_t GutterTree::insert(const update_t &upd) {
     BufferControlBlock::buffer_ready.wait(lk, [root, this]{return (root->size() < buffer_size + page_size);});
     if (root->size() < buffer_size + page_size) {
       lk.unlock();
-      root->lock(); // ensure that a worker isn't flushing this node.
+      root->lock_rw(); // ensure that a worker isn't flushing this node.
       serialize_update(GutterTree::cache + root->size() + root->offset(), upd);
       root->set_size(root->size() + serial_update_size);
       // printf("Did an insertion. Root %i size now %lu\n", r_id, root->size());
@@ -308,7 +322,7 @@ insert_ret_t GutterTree::insert(const update_t &upd) {
     BufferFlusher::flush_ready.notify_one();
     // printf("Added to %i to flush queue\n", r_id);
   }
-  root->unlock(); // no longer need root lock
+  root->unlock_rw(); // no longer need root lock
 }
 
 /*
@@ -395,13 +409,13 @@ flush_ret_t inline GutterTree::flush_internal_node(flush_struct &flush_from, Buf
     memcpy(flush_from.read_buffers[level], cache+bcb->offset(), data_size); // move the data over
     bcb->set_size(); // data is copied out so no need to save it
 
-    // now do_flush which doesn't require locking the top buffer! yay!
+    // now do_flush which doesn't require rw locking the top buffer! yay!
+    bcb->unlock_rw(); // allow read/writes to this buffer but maintain flush lock
     do_flush(flush_from, data_size, bcb->first_child, bcb->min_key, bcb->max_key, bcb->children_num, bcb->level);
     return;
   } 
 
   // sub level 0 flush
-  // bcb->lock(); // for these sub-level buffers we lock them the entire time they're being flushed
   uint32_t data_to_read = bcb->size();
   uint32_t offset = 0;
   while(data_to_read > 0) {
@@ -415,7 +429,6 @@ flush_ret_t inline GutterTree::flush_internal_node(flush_struct &flush_from, Buf
   }
   do_flush(flush_from, bcb->size(), bcb->first_child, bcb->min_key, bcb->max_key, bcb->children_num, bcb->level);
   bcb->set_size(); // set size if sub level 0 flush
-  // bcb->unlock();
 }
 
 flush_ret_t inline GutterTree::flush_leaf_node(flush_struct &flush_from, BufferControlBlock *bcb) {
@@ -423,12 +436,11 @@ flush_ret_t inline GutterTree::flush_leaf_node(flush_struct &flush_from, BufferC
   if (level == 0) {
     wq->push(cache + bcb->offset(), bcb->size());
     bcb->set_size();
-    // bcb->unlock();
+    bcb->unlock_rw(); // don't need rw lock anymore
     return;
   }
 
   // sub level flush
-  // bcb->lock(); // for these sub-level buffers we lock them the entire time they're being flushed
   uint32_t data_to_read = bcb->size();
   uint32_t offset = 0;
   while(data_to_read > 0) {
@@ -444,7 +456,6 @@ flush_ret_t inline GutterTree::flush_leaf_node(flush_struct &flush_from, BufferC
     
   // reset the BufferControlBlock
   bcb->set_size();
-  // bcb->unlock();
 }
 
 // ask the gutter_tree for data
@@ -467,7 +478,7 @@ bool GutterTree::get_data(data_ret_t &data) {
   if (len == 0) {
     wq->pop(i);
     return false; // we got no data so return not valid
-        }
+  }
 
   data.second.clear(); // remove any old data from the vector
   uint32_t vec_len  = len / serial_update_size;
@@ -504,7 +515,7 @@ bool GutterTree::get_data(data_ret_t &data) {
 // of our cached root buffers
 flush_ret_t GutterTree::flush_subtree(flush_struct &flush_from, buffer_id_t first_child) {
   BufferControlBlock *root = buffers[first_child];
-  root->lock();
+  root->lock_flush();
 
   buffer_id_t num_children = 1;
   for(int l = 0; l < max_level; l++) {
@@ -519,7 +530,8 @@ flush_ret_t GutterTree::flush_subtree(flush_struct &flush_from, buffer_id_t firs
     first_child  = new_first_child;
     num_children = new_num_children;
   }
-  root->unlock();
+  root->unlock_rw();
+  root->unlock_flush();
 }
 
 flush_ret_t GutterTree::force_flush() {

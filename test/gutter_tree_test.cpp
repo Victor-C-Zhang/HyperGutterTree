@@ -153,9 +153,11 @@ TEST(BasicInsert, EvilInsertions) {
 
 
 TEST(Parallelism, ManyThreads) {
+  // fairly large number of updates and small buffers
+  // to create a large number of flushes from root buffers
   const int nodes       = 1024;
-  const int num_updates = 5206;
-  const int buf_exp     = 20;
+  const int num_updates = 400000;
+  const int buf_exp     = 17;
   const int branch      = 8;
 
   // here we limit the number of slots in the circular queue to 

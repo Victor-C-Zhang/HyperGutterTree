@@ -1,17 +1,15 @@
 #include <cassert>
 #include <fstream>
-#include <math.h>
 #include "../include/standalone_gutters.h"
 
-uint32_t StandAloneGutters::queue_factor;
-uint32_t StandAloneGutters::gutter_factor;
 const unsigned first_idx = 2;
 
 StandAloneGutters::StandAloneGutters(node_id_t num_nodes, int workers) :
 buffers(num_nodes) {
   configure(); // read buffering configuration file
 
-  uint32_t bytes_size = floor(42 * sizeof(node_id_t) * pow(log2(num_nodes), 2)); // size of leaf proportional to size of sketch
+  // size of leaf proportional to size of sketch
+  uint32_t bytes_size = floor(gutter_factor * sketch_size(num_nodes));
   buffer_size = bytes_size / sizeof(node_id_t);
 
   wq = new WorkQueue(workers * queue_factor, bytes_size);
@@ -30,7 +28,7 @@ StandAloneGutters::~StandAloneGutters() {
 // Read the configuration file to determine a variety of Buffering params
 void StandAloneGutters::configure() {
   int queue_f  = 2;
-  int gutter_f = 1;
+  float gutter_f = 1;
 
   std::string line;
   std::ifstream conf("./buffering.conf");
@@ -45,10 +43,10 @@ void StandAloneGutters::configure() {
         }
       }
       if(line.substr(0, line.find('=')) == "gutter_factor") {
-        gutter_factor = std::stoi(line.substr(line.find('=') + 1));
-        if (gutter_factor > 10 || gutter_factor < 1) {
-          printf("WARNING: gutter_factor out of bounds [1,50] using default(1)\n");
-          gutter_factor = 1;
+        gutter_f = std::stof(line.substr(line.find('=') + 1));
+        if (gutter_f < 1 && gutter_f > -1) {
+          printf("WARNING: gutter_factor must be outside of range -1 < x < 1 using default(1)\n");
+          gutter_f = 1;
         }
       }
     }
@@ -56,7 +54,9 @@ void StandAloneGutters::configure() {
     printf("WARNING: Could not open buffering configuration file! Using default setttings.\n");
   }
   queue_factor  = queue_f;
-  gutter_factor = gutter_f; // works on POSIX systems (alternative is boost)
+  gutter_factor = gutter_f;
+  if (gutter_factor < 0)
+    gutter_factor = 1 / (-1 * gutter_factor); // gutter factor reduces size if negative
 }
 
 void StandAloneGutters::flush(node_id_t *buffer, uint32_t num_bytes) {

@@ -47,9 +47,9 @@ void BufferFlusher::do_work() {
       }
       else {
         BufferControlBlock *bcb = gt->buffers[bcb_id];
-        bcb->lock();
+        bcb->lock_flush();
         gt->flush_control_block(*flush_data, bcb); // flush and unlock the bcb
-        bcb->unlock();
+        bcb->unlock_flush();
       }
       // printf("BufferFlusher id=%i done\n", id);
       working = false;

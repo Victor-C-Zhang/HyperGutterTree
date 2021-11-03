@@ -27,6 +27,10 @@ private:
    * Size_Factor  :   Decrease the amount of bytes used per node by this multiplicative factor
    */
   void configure();
+
+  // configuration variables
+  uint32_t queue_factor; // number of elements in queue is this factor * num_workers
+  float gutter_factor;   // factor which increases/decreases the leaf gutter size
 public:
   /**
    * Constructs a new .
@@ -69,6 +73,4 @@ public:
   void set_non_block(bool block);
 
   static const uint32_t serial_update_size = sizeof(node_id_t);
-  static uint32_t gutter_factor;
-  static uint32_t queue_factor;
 };

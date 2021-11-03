@@ -80,6 +80,7 @@ private:
   uint64_t leaf_size;    // size of a leaf buffer
   uint32_t queue_factor; // number of elements in queue is this factor * num_workers
   uint32_t num_flushers; // the number of flush threads
+  float gutter_factor;   // factor which increases/decreases the leaf gutter size
 
   //File descriptor of backing file for storage
   int backing_store;
