@@ -22,12 +22,7 @@ void querier(GutterTree *gt, int nodes) {
   if (valid) {
     Node key = data.first;
     std::vector<Node> updates = data.second;
-    // verify that the updates are all between the correct nodes
-    for (Node upd : updates) {
-    // printf("edge to %d\n", upd.first);
-    ASSERT_EQ(nodes - (key + 1), upd) << "key " << key;
-    upd_processed += 1;
-    }
+    upd_processed += updates.size();
   }
   else if(shutdown)
     return;
@@ -35,13 +30,14 @@ void querier(GutterTree *gt, int nodes) {
 }
 
 void write_configuration(uint32_t buffer_exp, uint32_t fanout, int queue_factor, 
-                        int page_factor, int num_threads) {
+                        int page_factor, int num_threads, float gutter_factor) {
   std::ofstream conf("./buffering.conf");
   conf << "buffer_exp=" << buffer_exp << std::endl;
   conf << "branch=" << fanout << std::endl;
   conf << "queue_factor=" << queue_factor << std::endl;
   conf << "page_factor=" << page_factor << std::endl;
   conf << "num_threads=" << num_threads << std::endl;
+  conf << "gutter_factor=" << gutter_factor << std::endl;
 }
 
 void progress(const uint64_t num_updates) {
@@ -64,11 +60,11 @@ void progress(const uint64_t num_updates) {
 // and no work is claimed off of the work queue
 // to work correctly num_updates must be a multiple of nodes
 void run_test(const int nodes, const uint64_t num_updates, const uint64_t buffer_exp, 
- const int branch_factor, const int threads=1, const int flushers=1) {
+ const int branch_factor, const int threads=1, const int flushers=1, const float gut_factor=1) {
   printf("Running Test: nodes=%i num_updates=%lu buffer_size 2^%lu branch_factor %i\n",
      nodes, num_updates, buffer_exp, branch_factor);
 
-  write_configuration(buffer_exp, branch_factor, 16, 5, flushers); //16=queue_factor, 5=page_factor
+  write_configuration(buffer_exp, branch_factor, 16, 5, flushers, gut_factor); //16=queue_factor, 5=page_factor
 
   // define the location of the GutterTree here for experiments
   // for our throughput tests we place this upon a fast SSD
@@ -137,10 +133,11 @@ TEST(GT_Thoughput, HugeExperiment) {
   const uint64_t num_updates = GB << 2; // 4 billion
   const uint64_t buf_exp     = 23;
   const int branch           = 64;
-  const int threads          = 10;
+  const int threads          = 30;
   const int flushers         = 1;
+  const float gut_factor     = 2;
 
-  run_test(nodes, num_updates, buf_exp, branch, threads, flushers);
+  run_test(nodes, num_updates, buf_exp, branch, threads, flushers, gut_factor);
 }
 
 TEST(GT_Thoughput, BigFanoutExperiment) {
@@ -148,8 +145,9 @@ TEST(GT_Thoughput, BigFanoutExperiment) {
   const uint64_t num_updates = GB << 2; // 4 billion
   const uint64_t buf_exp     = 23;
   const int branch           = 512;
-  const int threads          = 10;
-  const int flushers         = 1;
+  const int threads          = 30;
+  const int flushers         = 8;
+  const float gut_factor     = 2;
 
-  run_test(nodes, num_updates, buf_exp, branch, threads, flushers);
+  run_test(nodes, num_updates, buf_exp, branch, threads, flushers, gut_factor);
 }

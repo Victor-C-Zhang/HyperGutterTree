@@ -178,6 +178,7 @@ TEST(Parallelism, ManyThreads) {
     upd.second = (nodes - 1) - (i % nodes);
     gt->insert(upd);
   }
+  printf("force flush\n");
   gt->force_flush();
   shutdown = true;
   gt->set_non_block(true); // switch to non-blocking calls in an effort to exit
