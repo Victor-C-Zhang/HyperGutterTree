@@ -55,8 +55,8 @@ void BufferControlBlock::validate_write(char *data, uint32_t size) {
   while(data - data_start < size) {
     Node key = *((Node *) data);
     if (key < min_key || key > max_key) {
-      printf("ERROR: incorrect key %lu --> ", key); print();
-      throw BufferFullError(id); // not the correct error but just testing function
+      printf("ERROR: Validate Write: incorrect key %lu --> ", key); print();
+      throw KeyIncorrectError();
     }
     data += GutterTree::serial_update_size;
   }

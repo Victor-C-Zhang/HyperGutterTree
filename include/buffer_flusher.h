@@ -5,6 +5,7 @@
 #include <condition_variable>
 #include <queue>
 #include <atomic>
+#include <thread>
 
 class GutterTree;
 class flush_struct;
@@ -17,9 +18,6 @@ public:
   static std::queue<uint32_t> flush_queue;
   static std::mutex queue_lock;
 
-  // memory for flushing
-  flush_struct *flush_data;
-
   BufferFlusher(uint32_t id, GutterTree *gt);
   ~BufferFlusher();
 
@@ -31,9 +29,12 @@ private:
     return 0;
   }
 
+  // memory for flushing
+  flush_struct *flush_data;
+
+  std::thread thr;
   uint32_t id;
   GutterTree *gt;
-  pthread_t thr;
   std::atomic<bool> working; // is this thread actively working on something
 
   void do_work();

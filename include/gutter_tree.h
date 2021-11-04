@@ -12,7 +12,6 @@
 
 typedef void insert_ret_t;
 typedef void flush_ret_t;
-typedef std::pair<Node, std::vector<Node>> data_ret_t;
 
 class BufferFlusher;
 struct flush_struct;

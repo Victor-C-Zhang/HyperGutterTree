@@ -75,7 +75,7 @@ void run_test(const uint32_t nodes, const uint32_t num_updates, const int buffer
   delete gt;
 }
 
-TEST(BasicInsert, Small) {
+TEST(GutterTreeTests, Small) {
   const int nodes       = 10;
   const int num_updates = 400;
   const int buf_exp     = 12;
@@ -84,7 +84,7 @@ TEST(BasicInsert, Small) {
   run_test(nodes, num_updates, buf_exp, branch);
 }
 
-TEST(BasicInsert, Medium) {
+TEST(GutterTreeTests, Medium) {
   const int nodes       = 100;
   const int num_updates = 360000;
   const int buf_exp     = 20;
@@ -93,7 +93,7 @@ TEST(BasicInsert, Medium) {
   run_test(nodes, num_updates, buf_exp, branch);
 }
 
-TEST(BasicInsert, ManyInserts) {
+TEST(GutterTreeTests, ManyInserts) {
   const int nodes       = 32;
   const int num_updates = 1000000;
   const int buf_exp     = 20;
@@ -109,7 +109,7 @@ TEST(BasicInsert, ManyInserts) {
 // is done. We insert a full buffer of 0 updates.
 //
 // For exampele 0 and 2, then 0 and 4, etc. 
-TEST(BasicInsert, EvilInsertions) {
+TEST(GutterTreeTests, EvilInsertions) {
   int full_root = MB/GutterTree::serial_update_size;
   const int nodes       = 32;
   const int num_updates = 4 * full_root;
@@ -152,7 +152,7 @@ TEST(BasicInsert, EvilInsertions) {
 }
 
 
-TEST(Parallelism, ManyThreads) {
+TEST(GutterTreeTests, ParallelInsert) {
   // fairly large number of updates and small buffers
   // to create a large number of flushes from root buffers
   const int nodes       = 1024;
@@ -178,7 +178,6 @@ TEST(Parallelism, ManyThreads) {
     upd.second = (nodes - 1) - (i % nodes);
     gt->insert(upd);
   }
-  printf("force flush\n");
   gt->force_flush();
   shutdown = true;
   gt->set_non_block(true); // switch to non-blocking calls in an effort to exit

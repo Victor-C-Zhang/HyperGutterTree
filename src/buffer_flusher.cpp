@@ -15,13 +15,13 @@ BufferFlusher::BufferFlusher(uint32_t id, GutterTree *gt)
 
   flush_data = new flush_struct(gt);
 
-  pthread_create(&thr, NULL, BufferFlusher::start_flusher, this);
+  thr = std::thread(BufferFlusher::start_flusher, this);
 }
 
 BufferFlusher::~BufferFlusher() {
   shutdown = true;
   flush_ready.notify_all();
-  pthread_join(thr, NULL);
+  thr.join();
 
   delete flush_data;
 }
@@ -47,7 +47,9 @@ void BufferFlusher::do_work() {
       }
       else {
         BufferControlBlock *bcb = gt->buffers[bcb_id];
+        bcb->lock_flush();
         gt->flush_control_block(*flush_data, bcb); // flush and unlock the bcb
+        bcb->unlock_flush();
       }
       // printf("BufferFlusher id=%i done\n", id);
       working = false;
