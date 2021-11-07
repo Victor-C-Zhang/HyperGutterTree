@@ -43,7 +43,9 @@ void BufferFlusher::do_work() {
       }
 
       if (force_flush) {
-        gt->flush_subtree(*flush_data, bcb_id);
+        // flush the entire subtree of all updates
+        BufferControlBlock *bcb = gt->buffers[bcb_id];
+        gt->flush_subtree(*flush_data, bcb);
       }
       else {
         BufferControlBlock *bcb = gt->buffers[bcb_id];

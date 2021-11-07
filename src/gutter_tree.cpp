@@ -332,8 +332,9 @@ insert_ret_t GutterTree::insert(const update_t &upd) {
  * IMPORTANT: after perfoming the flush it is the caller's responsibility to reset
  * the number of elements in the buffer and associated pointers.
  *
- * IMPORTANT: Unless we add more flush_buffers only a single flush at each level may occur 
- * at once otherwise the data will clash
+ * IMPORTANT: Only one thread should be flushing any given buffer at a time. We 
+ * currently enforce this by maintaining a lock on a root node while flushing
+ * the associated sub-tree
  */
 flush_ret_t GutterTree::do_flush(flush_struct &flush_from, uint32_t data_size, uint32_t begin, 
   node_id_t min_key, node_id_t max_key, uint16_t options, uint8_t level) {
@@ -411,9 +412,8 @@ flush_ret_t inline GutterTree::flush_internal_node(flush_struct &flush_from, Buf
     memcpy(flush_from.read_buffers[level], cache+bcb->offset(), data_size); // move the data over
     bcb->set_size(); // data is copied out so no need to save it
 
-    // now do_flush which doesn't require rw locking the top buffer! yay!
-    bcb->unlock_rw(); // allow read/writes to this buffer but maintain flush lock
     bcb->lock_flush();
+    bcb->unlock_rw(); // allow read/writes to this buffer but maintain flush lock
     do_flush(flush_from, data_size, bcb->first_child, bcb->min_key, bcb->max_key, bcb->children_num, bcb->level);
     bcb->unlock_flush();
     return;
@@ -517,8 +517,7 @@ bool GutterTree::get_data(data_ret_t &data) {
 
 // Helper function for force flush. This function flushes an entire subtree rooted at one
 // of our cached root buffers
-flush_ret_t GutterTree::flush_subtree(flush_struct &flush_from, buffer_id_t root_id) {
-  BufferControlBlock *root = buffers[root_id];
+flush_ret_t GutterTree::flush_subtree(flush_struct &flush_from, BufferControlBlock *root) {
   flush_control_block(flush_from, root);
 
   root->lock_flush(); // re-acquire the flush lock for flushing sub-tree
@@ -532,7 +531,7 @@ flush_ret_t GutterTree::flush_subtree(flush_struct &flush_from, buffer_id_t root
       BufferControlBlock *cur = buffers[idx + first_child];
       if (idx == 0) new_first_child = cur->first_child;
       new_num_children += cur->children_num;
-      
+
       flush_control_block(flush_from, cur);
     }
     first_child  = new_first_child;
@@ -562,7 +561,7 @@ flush_ret_t GutterTree::force_flush() {
       BufferFlusher::flush_queue.pop();
       BufferFlusher::queue_lock.unlock();
       // printf("main thread flushing buffer %u\n", idx);
-      flush_subtree(*flush_data, idx);
+      flush_subtree(*flush_data, buffers[idx]);
       // printf("main thread done\n");
     } else {
       BufferFlusher::queue_lock.unlock();

@@ -62,10 +62,6 @@ private:
   // Work queue in which we place leaves that fill up
   WorkQueue *wq;
 
-  flush_ret_t flush_control_block(BufferControlBlock *bcb);
-  flush_ret_t flush_internal_node(BufferControlBlock *bcb);
-  flush_ret_t flush_leaf_node(BufferControlBlock *bcb);
-
   /*
    * Variables which track universal information about the buffer tree which
    * we would like to be accesible to all the bufferControlBlocks
@@ -121,8 +117,12 @@ public:
    */
   flush_ret_t force_flush();
 
-  // Functions for flushing bcbs or subtrees of the graph
-  flush_ret_t flush_subtree(flush_struct &flush_from, buffer_id_t first_child);
+  /**
+   * Functions for flushing bcbs or subtrees of the graph
+   * @param flush_from      The memory to use when flushing - associated with a given thread
+   * @param bcb             The buffer_control_block to flush
+   */
+  flush_ret_t flush_subtree(flush_struct &flush_from, BufferControlBlock *bcb);
   flush_ret_t flush_control_block(flush_struct &flush_from, BufferControlBlock *bcb);
 
   /*

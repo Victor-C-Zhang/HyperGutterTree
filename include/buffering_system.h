@@ -12,6 +12,6 @@ public:
   virtual ~BufferingSystem() {};
 
   static double sketch_size(node_id_t num_nodes) {
-    return 42 * sizeof(node_id_t) * pow(log2(num_nodes), 2); 
+    return 42 * sizeof(node_id_t) * pow(log2(num_nodes), 2) / (log2(3) - 1); 
   }
 };
