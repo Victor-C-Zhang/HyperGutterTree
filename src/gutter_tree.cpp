@@ -391,8 +391,10 @@ flush_ret_t GutterTree::do_flush(flush_struct &flush_from, uint32_t data_size, u
 }
 
 flush_ret_t GutterTree::flush_control_block(flush_struct &flush_from, BufferControlBlock *bcb) {
+  bcb->lock_rw();
   // printf("flushing "); bcb->print();
   if(bcb->size() == 0) {
+    bcb->unlock_rw();
     return; // don't flush empty control blocks
   }
 
@@ -411,7 +413,9 @@ flush_ret_t inline GutterTree::flush_internal_node(flush_struct &flush_from, Buf
 
     // now do_flush which doesn't require rw locking the top buffer! yay!
     bcb->unlock_rw(); // allow read/writes to this buffer but maintain flush lock
+    bcb->lock_flush();
     do_flush(flush_from, data_size, bcb->first_child, bcb->min_key, bcb->max_key, bcb->children_num, bcb->level);
+    bcb->unlock_flush();
     return;
   } 
 
@@ -513,11 +517,14 @@ bool GutterTree::get_data(data_ret_t &data) {
 
 // Helper function for force flush. This function flushes an entire subtree rooted at one
 // of our cached root buffers
-flush_ret_t GutterTree::flush_subtree(flush_struct &flush_from, buffer_id_t first_child) {
-  BufferControlBlock *root = buffers[first_child];
-  root->lock_flush();
+flush_ret_t GutterTree::flush_subtree(flush_struct &flush_from, buffer_id_t root_id) {
+  BufferControlBlock *root = buffers[root_id];
+  flush_control_block(flush_from, root);
 
-  buffer_id_t num_children = 1;
+  root->lock_flush(); // re-acquire the flush lock for flushing sub-tree
+
+  buffer_id_t first_child = root->first_child;
+  buffer_id_t num_children = root->children_num;
   for(int l = 0; l < max_level; l++) {
     buffer_id_t new_first_child  = 0;
     buffer_id_t new_num_children = 0;
@@ -525,12 +532,13 @@ flush_ret_t GutterTree::flush_subtree(flush_struct &flush_from, buffer_id_t firs
       BufferControlBlock *cur = buffers[idx + first_child];
       if (idx == 0) new_first_child = cur->first_child;
       new_num_children += cur->children_num;
+      
       flush_control_block(flush_from, cur);
     }
     first_child  = new_first_child;
     num_children = new_num_children;
   }
-  root->unlock_rw();
+  // done flushing sub-tree so unlock root
   root->unlock_flush();
 }
 

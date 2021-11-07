@@ -76,11 +76,11 @@ public:
   // Other buffers should not require synchronization
   // We keep two locks to allow writes to root to happen while flushing
   // but need to enforce that flushes are done sequentially
-  void lock_flush()   {RW_lock.lock(); flush_lock.lock();}
-  void unlock_flush() {flush_lock.unlock();} // call unlock_rw first
+  void inline lock_flush()   {if (level == 0) flush_lock.lock();}
+  void inline unlock_flush() {if (level == 0) flush_lock.unlock();}
 
-  void lock_rw()   {RW_lock.lock();}
-  void unlock_rw() {RW_lock.unlock();}
+  void inline lock_rw()   {if (level == 0) RW_lock.lock();}
+  void inline unlock_rw() {if (level == 0) RW_lock.unlock();}
 
   void validate_write(char *data, uint32_t size);
 
