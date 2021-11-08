@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.5)
-project(FastBufferTree)
+project(GutterTree)
 
 set(CMAKE_CXX_STANDARD 11)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -62,80 +62,87 @@ if(NOT GTest_FOUND)
   endif()
 endif()
 
-add_library(FastBufferTree
-    src/buffer_tree.cpp
-    include/buffer_tree.h
+add_library(GutterTree
+    include/buffering_system.h
+    src/gutter_tree.cpp
+    include/gutter_tree.h
     src/buffer_control_block.cpp
     include/buffer_control_block.h
-    src/circular_queue.cpp
-    include/circular_queue.h
-    include/update.h)
-target_link_libraries(FastBufferTree PRIVATE GTest::gtest)
+    src/buffer_flusher.cpp
+    include/buffer_flusher.h
+    src/standalone_gutters.cpp
+    include/standalone_gutters.h
+    src/work_queue.cpp
+    include/work_queue.h
+    include/types.h)
+target_link_libraries(GutterTree PRIVATE GTest::gtest)
 # optimize unless debug
 if (DEFINED ENV{DEBUG})
   message("Disabling optimizations and enabling debug symbols")
-  target_compile_options(FastBufferTree PRIVATE -g)
+  target_compile_options(GutterTree PRIVATE -g)
 else ()
   if("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU" OR "${CMAKE_CXX_COMPILER_ID}" STREQUAL "AppleClang")
-    target_compile_options(FastBufferTree PRIVATE -O3)
+    target_compile_options(GutterTree PRIVATE -O3)
   elseif("${CMAKE_CXX_COMPILER_ID}" STREQUAL "MSVC")
-    target_compile_options(FastBufferTree PRIVATE /O2)
-endif()
+    target_compile_options(GutterTree PRIVATE /O2)
+  endif()
 endif()
 # different OSes have different ways of efficiently pre-allocating large files
 if (UNIX AND NOT APPLE)
   message("Enabling Fallocate for a linux system")
-  target_compile_options(FastBufferTree PRIVATE -DLINUX_FALLOCATE)
+  target_compile_options(GutterTree PRIVATE -DLINUX_FALLOCATE)
 elseif(WIN32)
   message("Using fileapi for Windows")
-  target_compile_options(FastBufferTree PRIVATE -DWINDOWS_FILEAPI)
+  target_compile_options(GutterTree PRIVATE -DWINDOWS_FILEAPI)
 else()
   message("Using fcntl for an Apple or other unknown system")
-  target_compile_options(FastBufferTree PRIVATE -DPOSIX_FCNTL)
+  target_compile_options(GutterTree PRIVATE -DPOSIX_FCNTL)
 endif ()
-set_target_properties(FastBufferTree PROPERTIES PUBLIC_HEADER 
-  "include/buffer_tree.h;include/buffer_control_block.h;include/circular_queue.h;include/update.h"
+set_target_properties(GutterTree PROPERTIES PUBLIC_HEADER 
+  "include/gutter_tree.h;include/buffer_control_block.h;include/standalone_gutters.h;include/buffer_flusher.h;include/work_queue.h;include/types.h;include/buffering_system.h"
 )
 
-add_executable(buffertree_tests
+add_executable(buffering_tests
   test/runner.cpp
-  test/basic_test.cpp)
-target_link_libraries(buffertree_tests PRIVATE GTest::gtest FastBufferTree)
+  test/gutter_tree_test.cpp
+  test/standalone_gutters_test.cpp)
+target_link_libraries(buffering_tests PRIVATE GTest::gtest GutterTree)
 # optimize unless debug
 if (DEFINED ENV{DEBUG})
   message("Disabling optimizations and enabling debug symbols")
-  target_compile_options(buffertree_tests PRIVATE -g)
+  target_compile_options(buffering_tests PRIVATE -g)
 else ()
   if("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU" OR "${CMAKE_CXX_COMPILER_ID}" STREQUAL "AppleClang")
-    target_compile_options(buffertree_tests PRIVATE -O3)
+    target_compile_options(buffering_tests PRIVATE -O3)
   elseif("${CMAKE_CXX_COMPILER_ID}" STREQUAL "MSVC")
-    target_compile_options(buffertree_tests PRIVATE /O2)
+    target_compile_options(buffering_tests PRIVATE /O2)
   endif()
 endif ()
 
-add_executable(buffer_experiment
+add_executable(buffering_experiment
   experiment/runner.cpp
-  experiment/experiment.cpp)
-target_link_libraries(buffer_experiment PRIVATE GTest::gtest FastBufferTree)
+  experiment/gutter_tree_exp.cpp
+  experiment/standalone_exp.cpp)
+target_link_libraries(buffering_experiment PRIVATE GTest::gtest GutterTree)
 # optimize unless debug
 if (DEFINED ENV{DEBUG})
   message("Disabling optimizations and enabling debug symbols")
-  target_compile_options(buffer_experiment PRIVATE -g)
+  target_compile_options(buffering_experiment PRIVATE -g)
 else ()
   if("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU" OR "${CMAKE_CXX_COMPILER_ID}" STREQUAL "AppleClang")
-    target_compile_options(buffer_experiment PRIVATE -O3)
+    target_compile_options(buffering_experiment PRIVATE -O3)
   elseif("${CMAKE_CXX_COMPILER_ID}" STREQUAL "MSVC")
-    target_compile_options(buffer_experiment PRIVATE /O2)
+    target_compile_options(buffering_experiment PRIVATE /O2)
   endif()
 endif ()
 
 
 #uncomment if manually installing project
 #without specifying INSTALL_PREFIX elsewhere
-#set(CMAKE_INSTALL_PREFIX ${CMAKE_CURRENT_BINARY_DIR}/BufferTree/prefix)
+#set(CMAKE_INSTALL_PREFIX ${CMAKE_CURRENT_BINARY_DIR}/GutterTree/prefix)
 
 # for use when building as an external project
-install(TARGETS FastBufferTree
+install(TARGETS GutterTree
   ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
   PUBLIC_HEADER DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
 )
