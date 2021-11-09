@@ -8,8 +8,8 @@ StandAloneGutters::StandAloneGutters(node_id_t num_nodes, int workers) :
 buffers(num_nodes) {
   configure(); // read buffering configuration file
 
-  // size of leaf proportional to size of sketch
-  uint32_t bytes_size = floor(gutter_factor * sketch_size(num_nodes));
+  // size of leaf proportional to size of sketch (add 2 because we have 2 metadata slots per buffer)
+  uint32_t bytes_size = floor(gutter_factor * sketch_size(num_nodes)) + 2 * sizeof(node_id_t);
   buffer_size = bytes_size / sizeof(node_id_t);
 
   wq = new WorkQueue(workers * queue_factor, bytes_size);
