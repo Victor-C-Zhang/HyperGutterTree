@@ -294,7 +294,7 @@ insert_ret_t GutterTree::insert(const update_t &upd) {
   // printf("inserting to gutter_tree . . . \n");
   
   // first calculate which of the roots we're inserting to
-  Node key = upd.first;
+  node_id_t key = upd.first;
   buffer_id_t r_id = which_child(key, 0, num_nodes-1, fanout); // TODO: Here we are assuming that num_nodes >= fanout
   BufferControlBlock *root = buffers[r_id];
   // printf("Insertion to buffer %i of size %llu\n", r_id, root->size());
