@@ -7,6 +7,30 @@
 #include <fcntl.h>  //posix_fallocate
 #include <errno.h>
 #include <fstream>
+#include <queue>
+
+/**
+ * Returns the minimum fanout necessary to achieve the a tree of depth max_level
+ * @param num_nodes    total number of nodes in the graph
+ * @param max_level    the depth of the tree when using maximum fanout
+ * @param max_fanout   the maximum fanout of the graph 
+ */
+static int min_fanout(node_id_t num_nodes, int max_level, int max_fanout) {
+  int min = 2;
+  int max = max_fanout;
+  int mid = ((max - min) / 2) + min;
+
+  while (mid != min && mid != max) {
+    int new_depth = ceil(log(num_nodes) / log(mid));
+    if (new_depth > max_level) 
+      min = mid;
+    else 
+      max = mid;
+
+    mid = ((max - min) / 2) + min;
+  }
+  return max;
+}
 
 /*
  * Constructor
@@ -15,6 +39,11 @@
  * We assume that node indices begin at 0 and increase to N-1
  */
 GutterTree::GutterTree(std::string dir, node_id_t nodes, int workers, bool reset=false) : dir(dir), num_nodes(nodes) {
+  if (num_nodes <= 1) {
+    printf("ERROR: Cannot create a GutterTree with fewer than 2 ids to buffer\n");
+    exit(EXIT_FAILURE);
+  }
+
   configure_tree();
 
   page_size = (page_size % serial_update_size == 0)? page_size : page_size + serial_update_size - page_size % serial_update_size;
@@ -25,6 +54,7 @@ GutterTree::GutterTree(std::string dir, node_id_t nodes, int workers, bool reset
   
   // setup universal variables
   max_level       = ceil(log(num_nodes) / log(fanout));
+  fanout          = min_fanout(num_nodes, max_level, fanout); // minimum fanout which preserves depth
   backing_EOF     = 0;
 
   // leaf size should be proportional to a sketch
@@ -50,7 +80,7 @@ GutterTree::GutterTree(std::string dir, node_id_t nodes, int workers, bool reset
     exit(1);
   }
 
-  setup_tree(); // setup the gutter tree
+  setup_tree(); // setup the structure of the GutterTree
 
   // create the work queue in which we will place full leaves
   wq = new WorkQueue(queue_factor*workers, leaf_size + page_size);
@@ -160,82 +190,87 @@ void print_tree(std::vector<BufferControlBlock *>bcb_list) {
   }
 }
 
-// TODO: clean up this function
 void GutterTree::setup_tree() {
   printf("Creating a tree of depth %i\n", max_level);
   File_Pointer size = 0;
+  std::queue<BufferControlBlock *> bfs_queue; // stack of internal nodes to build is BFS pattern
 
-  // create the BufferControlBlocks
-  for (uint32_t l = 0; l < max_level; l++) { // loop through all levels
-    if(l == 1) size = 0; // reset the size because the first level is held in cache
+  // Create the roots of the trees
+  double total = num_nodes;
+  node_id_t key  = 0;
+  for (uint32_t i = 0; i < fanout; i++) {
+    BufferControlBlock *bcb = new BufferControlBlock(i, size, 0);
 
-    uint32_t level_size    = pow(fanout, l+1); // number of blocks in this level
-    uint32_t plevel_size   = pow(fanout, l);
-    uint32_t start         = buffers.size();
-    node_id_t key          = 0;
+    // set min_key and max_key to be appropriate based upon the keys allocated to roots
+    // and the fanout. (example: if we have fanout = 3 and 10 keys, roots are: 0-3, 4-6, 7-9)
+    bcb->min_key = key;
+    key += ceil(total / (fanout - i));
+    bcb->max_key = key - 1;
 
-    double parent_keys = num_nodes;
-    uint32_t options   = fanout;
-    bool skip          = false;
-    uint32_t parent    = 0;
-    File_Pointer index = 0;
+    total -= ceil(total / (fanout - i));
+    if (bcb->min_key != bcb->max_key) {
+      bfs_queue.push(bcb); // need to process this one's children
+      size += buffer_size + page_size; // this bcb is an internal node
+    }
+    else {
+      size += leaf_size + page_size; // this bcb is a leaf
+    }
+    buffers.push_back(bcb);
+  }
 
-    buffers.reserve(start + level_size);
-    for (uint32_t i = 0; i < level_size; i++) { // loop through all blocks in the level
-      // get the parent of this node if not level 1 and if we have a new parent
-      if (l > 0 && (i-start) % fanout == 0) {
-        parent      = start + i/fanout - plevel_size; // this logic should check out because only the last level is ever not full
-        parent_keys = buffers[parent]->max_key - buffers[parent]->min_key + 1;
-        key         = buffers[parent]->min_key;
-        options     = fanout;
-        skip        = (parent_keys == 1)? true : false; // if parent leaf then skip
+  // handle the internal nodes and leaves now by pulling from stack until empty
+  size = 0; // reset size because roots are in cache. Size now refers to size on disk
+  while (!bfs_queue.empty()) {
+    BufferControlBlock *parent = bfs_queue.front();
+    bfs_queue.pop(); // remove parent from stack
+
+    int key = parent->min_key;
+    double total = parent->max_key - parent->min_key + 1;
+    int num_kids = (total < fanout)? total : fanout;
+
+    for (int i = 0; i < num_kids; i++) {
+      BufferControlBlock *bcb = new BufferControlBlock(buffers.size(), size, parent->level + 1);
+
+      bcb->min_key = key;
+      key += ceil(total / (num_kids - i));
+      bcb->max_key = key - 1;
+
+      total -= ceil(total / (num_kids - i));
+      if (bcb->min_key != bcb->max_key) {
+        bfs_queue.push(bcb); // need to process this one's children
+        size += buffer_size + page_size; // this bcb is an internal node
       }
-      if (skip || parent_keys == 0) {
-        continue;
+      else {
+        size += leaf_size + page_size; // this bcb is a leaf
       }
-
-      BufferControlBlock *bcb = new BufferControlBlock(start + index, size, l);
-      bcb->min_key     = key;
-      key              += ceil(parent_keys/options);
-      bcb->max_key     = key - 1;
-
-      if (l != 0)
-        buffers[parent]->add_child(start + index);
-      
-      parent_keys -= ceil(parent_keys/options);
-      options--;
+      parent->add_child(bcb->get_id());
       buffers.push_back(bcb);
-      index++; // seperate variable because sometimes we skip stuff
-      if(bcb->is_leaf())
-        size += leaf_size + page_size; // leaves are of size == sketch
-      else 
-        size += buffer_size + page_size;
     }
   }
 
-    // allocate file space for all the nodes to prevent fragmentation
-  #ifdef LINUX_FALLOCATE
-    fallocate(backing_store, 0, 0, size); // linux only but fast
-  #endif
-    #ifdef WINDOWS_FILEAPI
-    // https://stackoverflow.com/questions/455297/creating-big-file-on-windows/455302#455302
-    // TODO: implement the above
-    throw std::runtime_error("Windows is not currently supported by GutterTree");
-  #endif
-  #ifdef POSIX_FCNTL
-    // taken from https://github.com/trbs/fallocate
-    fstore_t store_options = {
-      F_ALLOCATECONTIG,
-      F_PEOFPOSMODE,
-      0,
-      static_cast<off_t>(size),
-      0
-    };
-    fcntl(backing_store, F_PREALLOCATE, &store_options);
-  #endif
-    
-    backing_EOF = size;
-    // print_tree(buffers);
+  // allocate file space for all the nodes to prevent fragmentation
+#ifdef LINUX_FALLOCATE
+  fallocate(backing_store, 0, 0, size); // linux only but fast
+#endif
+  #ifdef WINDOWS_FILEAPI
+  // https://stackoverflow.com/questions/455297/creating-big-file-on-windows/455302#455302
+  // TODO: implement the above
+  throw std::runtime_error("Windows is not currently supported by GutterTree");
+#endif
+#ifdef POSIX_FCNTL
+  // taken from https://github.com/trbs/fallocate
+  fstore_t store_options = {
+    F_ALLOCATECONTIG,
+    F_PEOFPOSMODE,
+    0,
+    static_cast<off_t>(size),
+    0
+  };
+  fcntl(backing_store, F_PREALLOCATE, &store_options);
+#endif
+  
+  backing_EOF = size;
+  // print_tree(buffers);
 }
 
 // serialize an update to a data location (should only be used for root I think)
@@ -295,7 +330,7 @@ insert_ret_t GutterTree::insert(const update_t &upd) {
   
   // first calculate which of the roots we're inserting to
   Node key = upd.first;
-  buffer_id_t r_id = which_child(key, 0, num_nodes-1, fanout); // TODO: Here we are assuming that num_nodes >= fanout
+  buffer_id_t r_id = which_child(key, 0, num_nodes-1, fanout);
   BufferControlBlock *root = buffers[r_id];
   // printf("Insertion to buffer %i of size %llu\n", r_id, root->size());
 
@@ -353,6 +388,7 @@ flush_ret_t GutterTree::do_flush(flush_struct &flush_from, uint32_t data_size, u
   while (data - data_start < data_size) { // loop through all the data to be flushed
     node_id_t key = load_key(data);
     uint32_t child  = which_child(key, min_key, max_key, options);
+    // printf("moving update of key %u to child %u min_key=%u, max_key=%u\n", key, child+begin, min_key, max_key);
     if (child > fanout - 1) {
       printf("ERROR: incorrect child %u abandoning insert key=%u min=%u max=%u\n", child, key, min_key, max_key);
       printf("first child = %u\n", buffers[begin]->get_id());
