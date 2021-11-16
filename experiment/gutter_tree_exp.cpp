@@ -128,25 +128,25 @@ TEST(GutterTree, ExtraLarge) {
   run_test(nodes, num_updates, buf_exp, branch);
 }
 
-TEST(GT_Thoughput, HugeExperiment) {
+TEST(GT_Throughput, 2_18Experiment) {
   const int nodes            = 262144;
-  const uint64_t num_updates = GB << 2; // 4 billion
+  const uint64_t num_updates = GB << 3; // 8 billion
   const uint64_t buf_exp     = 23;
-  const int branch           = 64;
+  const int branch           = 512;
   const int threads          = 10;
-  const int flushers         = 1;
+  const int flushers         = 2;
   const float gut_factor     = 2;
 
   run_test(nodes, num_updates, buf_exp, branch, threads, flushers, gut_factor);
 }
 
-TEST(GT_Thoughput, BigFanoutExperiment) {
-  const int nodes            = 262144;
-  const uint64_t num_updates = GB << 2; // 4 billion
+TEST(GT_Throughput, 2_19Experiment) {
+  const int nodes            = 524288;
+  const uint64_t num_updates = GB << 3; // 8 billion
   const uint64_t buf_exp     = 23;
   const int branch           = 512;
   const int threads          = 10;
-  const int flushers         = 1;
+  const int flushers         = 2;
   const float gut_factor     = 2;
 
   run_test(nodes, num_updates, buf_exp, branch, threads, flushers, gut_factor);
