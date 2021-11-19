@@ -15,7 +15,7 @@ BufferControlBlock::BufferControlBlock(buffer_id_t id, File_Pointer off, uint8_t
 
 inline bool BufferControlBlock::check_size_limit(uint32_t size, uint32_t flush_size, uint32_t max_size) {
   if (storage_ptr + size > max_size) {
-    printf("buffer %i too full write size %u, storage_ptr = %lu, max = %u\n", id, size, storage_ptr, max_size);
+    printf("buffer %i too full write size %u, storage_ptr = %lu, max = %u\n", id, size, storage_ptr.load(), max_size);
     throw BufferFullError(id);
   }
   return storage_ptr + size >= flush_size;

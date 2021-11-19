@@ -7,6 +7,7 @@
 #include <math.h>
 #include "types.h"
 #include "buffer_control_block.h"
+#include "root_control_block.h"
 #include "work_queue.h"
 #include "buffering_system.h"
 
@@ -138,14 +139,6 @@ public:
   void set_non_block(bool block);
 
   /*
-   * Function to convert an update_t to a char array
-   * @param   dst the memory location to put the serialized data
-   * @param   src the edge update
-   * @return  nothing
-   */
-  void serialize_update(char *dst, update_t src);
-
-  /*
    * Function to covert char array to update_t
    * @param src the memory location to load serialized data from
    * @param dst the edge update to put stuff into
@@ -173,9 +166,10 @@ public:
    */
   void setup_tree();
 
-  // metadata control block(s)
+  // metadata control blocks
   // level 1 blocks take indices 0->(B-1). So on and so forth from there
   std::vector<BufferControlBlock*> buffers;
+  std::vector<RootControlBlock*> roots; // meta-data for roots
 
   /*
    * A bunch of functions for accessing buffer tree variables
@@ -190,7 +184,7 @@ public:
   inline uint32_t get_queue_factor() { return queue_factor; };
 
   inline int get_fd()       { return backing_store; };
-  inline char * get_cache() { return cache; };
+  inline char * get_cache() const { return cache; };
 
   static const uint32_t serial_update_size = sizeof(node_id_t) + sizeof(node_id_t); // size in bytes of an update
 };

@@ -1,7 +1,7 @@
 #pragma once
 #include <cstdint>
 #include <string>
-#include <mutex>
+#include <atomic>
 #include <condition_variable>
 #include "types.h"
 
@@ -16,16 +16,13 @@ class GutterTree;
  */
 class BufferControlBlock {
 private:
-  buffer_id_t id;
-
-  // condition variable to determine if the buffer needs to be flushed
-  // std::condition_variable needs_flushing;
+  const buffer_id_t id;
 
   // how many items are currently in the buffer
-  File_Pointer storage_ptr;
+  std::atomic<File_Pointer> storage_ptr;
 
   // where in the file is our data stored
-  File_Pointer file_offset;
+  const File_Pointer file_offset;
 
   /*
    * Check if this buffer needs a flush or if the current write will overflow
@@ -36,12 +33,6 @@ private:
    * @throw BufferFullError if the write will overflow the buffer size.
    */
   bool check_size_limit(uint32_t size, uint32_t flush_size, uint32_t max_size);
-
-  // lock for controlling read/write access to the buffer
-  std::mutex RW_lock;
-
-  // lock for controlling flushing this block and its sub-tree
-  std::mutex flush_lock;
 
 public:
   // this node's level in the tree. 0 is root, 1 is it's children, etc
@@ -72,16 +63,6 @@ public:
    */
   bool write(GutterTree *bf, char *data, uint32_t size);
 
-  // synchronization functions. Should be called when root buffers are read or written to.
-  // Other buffers should not require synchronization
-  // We keep two locks to allow writes to root to happen while flushing
-  // but need to enforce that flushes are done sequentially
-  void inline lock_flush()   {if (level == 0) flush_lock.lock();}
-  void inline unlock_flush() {if (level == 0) flush_lock.unlock();}
-
-  void inline lock_rw()   {if (level == 0) RW_lock.lock();}
-  void inline unlock_rw() {if (level == 0) RW_lock.unlock();}
-
   void validate_write(char *data, uint32_t size);
 
   inline bool is_leaf()                     {return min_key == max_key;}
@@ -91,27 +72,15 @@ public:
   inline File_Pointer offset()              {return file_offset;}
 
   inline void add_child(buffer_id_t child) {
-    children_num++;
-    first_child = (first_child == 0)? child : first_child;
+    first_child = (children_num == 0)? child : first_child;
+    ++children_num;
   }
 
   inline void print() {
     printf("buffer %u: storage_ptr = %lu, offset = %lu, min_key=%u, max_key=%u, first_child=%u, #children=%u, level=%u\n", 
-      id, storage_ptr, file_offset, min_key, max_key, first_child, children_num, level);
+      id, storage_ptr.load(), file_offset, min_key, max_key, first_child, children_num, level);
   }
 
   static std::condition_variable buffer_ready;
   static std::mutex buffer_ready_lock;
-};
-
-class BufferNotLockedError : public std::exception {
-private:
-  buffer_id_t id;
-public:
-  explicit BufferNotLockedError(buffer_id_t id) : id(id){}
-  const char* what() const noexcept override {
-    std::string temp = "Buffer not locked! id: " + std::to_string(id);
-    // ok, since this will terminate the program anyways
-    return temp.c_str();
-  }
 };

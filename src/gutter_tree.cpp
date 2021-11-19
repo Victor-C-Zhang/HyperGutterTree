@@ -61,9 +61,9 @@ GutterTree::GutterTree(std::string dir, node_id_t nodes, int workers, bool reset
   leaf_size       = floor(gutter_factor * sketch_size(num_nodes));
   leaf_size       = (leaf_size % serial_update_size == 0)? leaf_size : leaf_size + serial_update_size - leaf_size % serial_update_size;
 
-  // create memory for cache and flushing
+  // create memory for flushing
   flush_data = new flush_struct(this); // must be done after setting up universal variables
-  cache = (char *) malloc(fanout * ((uint64_t)buffer_size + page_size));
+  
 
   // open the file which will be our backing store for the non-root nodes
   // create it if it does not already exist
@@ -183,7 +183,11 @@ void GutterTree::configure_tree() {
     gutter_factor = 1 / (-1 * gutter_factor); // gutter factor reduces size if negative
 }
 
-void print_tree(std::vector<BufferControlBlock *>bcb_list) {
+void print_tree(std::vector<RootControlBlock *>rcb_list, std::vector<BufferControlBlock *>bcb_list) {
+  for(uint32_t i = 0; i < rcb_list.size(); i++) {
+    if (rcb_list[i] != nullptr)
+      rcb_list[i]->print();
+  }
   for(uint32_t i = 0; i < bcb_list.size(); i++) {
     if (bcb_list[i] != nullptr) 
       bcb_list[i]->print();
@@ -199,7 +203,10 @@ void GutterTree::setup_tree() {
   double total = num_nodes;
   node_id_t key  = 0;
   for (uint32_t i = 0; i < fanout; i++) {
-    BufferControlBlock *bcb = new BufferControlBlock(i, size, 0);
+    RootControlBlock *rcb = new RootControlBlock(i, size, buffer_size);
+    // get the first BufferControlBlock within the root and update that
+    // We will update the other bcb at the end of this process
+    BufferControlBlock *bcb = rcb->get_buf(0);
 
     // set min_key and max_key to be appropriate based upon the keys allocated to roots
     // and the fanout. (example: if we have fanout = 3 and 10 keys, roots are: 0-3, 4-6, 7-9)
@@ -208,15 +215,14 @@ void GutterTree::setup_tree() {
     bcb->max_key = key - 1;
 
     total -= ceil(total / (fanout - i));
-    if (bcb->min_key != bcb->max_key) {
-      bfs_queue.push(bcb); // need to process this one's children
-      size += buffer_size + page_size; // this bcb is an internal node
-    }
-    else {
-      size += leaf_size + page_size; // this bcb is a leaf
-    }
-    buffers.push_back(bcb);
+    if (bcb->min_key != bcb->max_key)
+      bfs_queue.push(bcb); // need to process this rcb's children
+
+    size += buffer_size * 2; // keep two buffers of size buffer_size for each root
+    roots.push_back(rcb);
   }
+
+  cache = (char *) malloc(size); // malloc memory for the root buffers
 
   // handle the internal nodes and leaves now by pulling from stack until empty
   size = 0; // reset size because roots are in cache. Size now refers to size on disk
@@ -248,6 +254,11 @@ void GutterTree::setup_tree() {
     }
   }
 
+  // loop through the roots and call finish_setup which ensures the buffers have
+  // appropriate meta-data
+  for (RootControlBlock *rcb : roots)
+    rcb->finish_setup();
+
   // allocate file space for all the nodes to prevent fragmentation
 #ifdef LINUX_FALLOCATE
   fallocate(backing_store, 0, 0, size); // linux only but fast
@@ -270,16 +281,7 @@ void GutterTree::setup_tree() {
 #endif
   
   backing_EOF = size;
-  // print_tree(buffers);
-}
-
-// serialize an update to a data location (should only be used for root I think)
-inline void GutterTree::serialize_update(char *dst, update_t src) {
-  node_id_t node1 = src.first;
-  node_id_t node2 = src.second;
-
-  memcpy(dst, &node1, sizeof(node_id_t));
-  memcpy(dst + sizeof(node_id_t), &node2, sizeof(node_id_t));
+  // print_tree(roots, buffers);
 }
 
 inline update_t GutterTree::deserialize_update(char *src) {
@@ -330,34 +332,11 @@ insert_ret_t GutterTree::insert(const update_t &upd) {
   
   // first calculate which of the roots we're inserting to
   Node key = upd.first;
-  buffer_id_t r_id = which_child(key, 0, num_nodes-1, fanout);
-  BufferControlBlock *root = buffers[r_id];
+  buffer_id_t root_id = which_child(key, 0, num_nodes-1, fanout);
+  RootControlBlock *root = roots[root_id];
   // printf("Insertion to buffer %i of size %llu\n", r_id, root->size());
 
-  // perform the write and block if necessary
-  while (true) {
-    std::unique_lock<std::mutex> lk(BufferControlBlock::buffer_ready_lock);
-    BufferControlBlock::buffer_ready.wait(lk, [root, this]{return (root->size() < buffer_size + page_size);});
-    if (root->size() < buffer_size + page_size) {
-      lk.unlock();
-      root->lock_rw(); // ensure that a worker isn't flushing this node.
-      serialize_update(GutterTree::cache + root->size() + root->offset(), upd);
-      root->set_size(root->size() + serial_update_size);
-      // printf("Did an insertion. Root %i size now %lu\n", r_id, root->size());
-      break;
-    }
-    lk.unlock();
-  }
-
-  // if the buffer is full enough, push it to the flush_queue
-  if (root->size() > buffer_size && root->size() - serial_update_size <= buffer_size) {
-    BufferFlusher::queue_lock.lock();
-    BufferFlusher::flush_queue.push(r_id);
-    BufferFlusher::queue_lock.unlock();
-    BufferFlusher::flush_ready.notify_one();
-    // printf("Added to %i to flush queue\n", r_id);
-  }
-  root->unlock_rw(); // no longer need root lock
+  root->insert(this, upd);
 }
 
 /*
@@ -428,10 +407,8 @@ flush_ret_t GutterTree::do_flush(flush_struct &flush_from, uint32_t data_size, u
 }
 
 flush_ret_t GutterTree::flush_control_block(flush_struct &flush_from, BufferControlBlock *bcb) {
-  bcb->lock_rw();
   // printf("flushing "); bcb->print();
   if(bcb->size() == 0) {
-    bcb->unlock_rw();
     return; // don't flush empty control blocks
   }
 
@@ -446,12 +423,9 @@ flush_ret_t inline GutterTree::flush_internal_node(flush_struct &flush_from, Buf
   if (level == 0) { // we have this in cache
     uint32_t data_size = bcb->size();
     memcpy(flush_from.read_buffers[level], cache+bcb->offset(), data_size); // move the data over
-    bcb->set_size(); // data is copied out so no need to save it
+    bcb->set_size(); // data is copied out so no need to save it TODO: experimentally evaluate this
 
-    bcb->lock_flush();
-    bcb->unlock_rw(); // allow read/writes to this buffer but maintain flush lock
     do_flush(flush_from, data_size, bcb->first_child, bcb->min_key, bcb->max_key, bcb->children_num, bcb->level);
-    bcb->unlock_flush();
     return;
   } 
 
@@ -476,7 +450,6 @@ flush_ret_t inline GutterTree::flush_leaf_node(flush_struct &flush_from, BufferC
   if (level == 0) {
     wq->push(cache + bcb->offset(), bcb->size());
     bcb->set_size();
-    bcb->unlock_rw(); // don't need rw lock anymore
     return;
   }
 
@@ -556,8 +529,6 @@ bool GutterTree::get_data(data_ret_t &data) {
 flush_ret_t GutterTree::flush_subtree(flush_struct &flush_from, BufferControlBlock *root) {
   flush_control_block(flush_from, root);
 
-  root->lock_flush(); // re-acquire the flush lock for flushing sub-tree
-
   buffer_id_t first_child = root->first_child;
   buffer_id_t num_children = root->children_num;
   for(int l = 0; l < max_level; l++) {
@@ -573,8 +544,6 @@ flush_ret_t GutterTree::flush_subtree(flush_struct &flush_from, BufferControlBlo
     first_child  = new_first_child;
     num_children = new_num_children;
   }
-  // done flushing sub-tree so unlock root
-  root->unlock_flush();
 }
 
 flush_ret_t GutterTree::force_flush() {
@@ -583,8 +552,8 @@ flush_ret_t GutterTree::force_flush() {
 
   // add each of the roots to the flush_queue
   BufferFlusher::queue_lock.lock();
-  for (buffer_id_t idx = 0; idx < fanout && idx < buffers.size(); idx++) {
-    BufferFlusher::flush_queue.push(idx);
+  for (buffer_id_t r_id = 0; r_id < fanout; r_id++) {
+    BufferFlusher::flush_queue.push({roots[r_id], roots[r_id]->cur_which()});
   }
   BufferFlusher::queue_lock.unlock();
   BufferFlusher::flush_ready.notify_all();
@@ -593,11 +562,16 @@ flush_ret_t GutterTree::force_flush() {
   while(true) {
     BufferFlusher::queue_lock.lock();
     if(!BufferFlusher::flush_queue.empty()) {
-      buffer_id_t idx = BufferFlusher::flush_queue.front();
+      flush_queue_elm elm = BufferFlusher::flush_queue.front();
       BufferFlusher::flush_queue.pop();
       BufferFlusher::queue_lock.unlock();
+      RootControlBlock *rcb = elm.rcb;
+      rcb->lock_flush();
+      BufferControlBlock *bcb = rcb->get_buf(elm.which_buf);
+
       // printf("main thread flushing buffer %u\n", idx);
-      flush_subtree(*flush_data, buffers[idx]);
+      flush_subtree(*flush_data, bcb);
+      rcb->unlock_flush();
       // printf("main thread done\n");
     } else {
       BufferFlusher::queue_lock.unlock();

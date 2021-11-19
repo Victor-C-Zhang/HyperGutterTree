@@ -7,7 +7,7 @@ set(CMAKE_CXX_EXTENSIONS ON)
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${PROJECT_BINARY_DIR}/lib)
 
 #Uncomment to enable debug
-#set(ENV{DEBUG} ON)
+set(ENV{DEBUG} ON)
 
 if("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU")
   message("Adding GNU compiler flags")
@@ -68,6 +68,8 @@ add_library(GutterTree
     include/gutter_tree.h
     src/buffer_control_block.cpp
     include/buffer_control_block.h
+    src/root_control_block.cpp
+    include/root_control_block.h
     src/buffer_flusher.cpp
     include/buffer_flusher.h
     src/standalone_gutters.cpp

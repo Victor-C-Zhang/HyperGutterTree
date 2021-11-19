@@ -4,7 +4,7 @@
 bool BufferFlusher::shutdown    = false;
 bool BufferFlusher::force_flush = false;
 std::condition_variable BufferFlusher::flush_ready;
-std::queue<buffer_id_t> BufferFlusher::flush_queue;
+std::queue<flush_queue_elm> BufferFlusher::flush_queue;
 std::mutex BufferFlusher::queue_lock;
 
 BufferFlusher::BufferFlusher(uint32_t id, GutterTree *gt) 
@@ -33,24 +33,23 @@ void BufferFlusher::do_work() {
     flush_ready.wait(queue_unique, [this]{return (!flush_queue.empty() || shutdown);});
     if (!flush_queue.empty()) {
       working = true;
-      buffer_id_t bcb_id = flush_queue.front();
+      flush_queue_elm elm = flush_queue.front();
       flush_queue.pop();
       // printf("BufferFlusher id=%i awoken processing buffer %u\n", id, bcb_id);
       queue_unique.unlock();
-      if (bcb_id >= gt->buffers.size()) {
-        fprintf(stderr, "ERROR: the id given in the flush_queue is too large! %u\n", bcb_id);
-        exit(EXIT_FAILURE);
-      }
+
+      RootControlBlock *rcb   = elm.rcb;
+      rcb->lock_flush();
+      BufferControlBlock *bcb = rcb->get_buf(elm.which_buf);
 
       if (force_flush) {
         // flush the entire subtree of all updates
-        BufferControlBlock *bcb = gt->buffers[bcb_id];
         gt->flush_subtree(*flush_data, bcb);
       }
       else {
-        BufferControlBlock *bcb = gt->buffers[bcb_id];
         gt->flush_control_block(*flush_data, bcb); // flush and unlock the bcb
       }
+      rcb->unlock_flush();
       // printf("BufferFlusher id=%i done\n", id);
       working = false;
       BufferControlBlock::buffer_ready.notify_one();
