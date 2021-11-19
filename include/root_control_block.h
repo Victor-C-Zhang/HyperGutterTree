@@ -32,7 +32,11 @@ public:
    * @param buf_size   The GutterTree this root is a component of
    * @return           A new RootControlBlock
    */
-  RootControlBlock(buffer_id_t id, File_Pointer off, uint32_t buf_size);
+  RootControlBlock(buffer_id_t id, File_Pointer off, uint32_t buf_size) :
+   id(id), buffer_size(buf_size) {
+    buffers[0] = new BufferControlBlock(0, off, 0);
+    buffers[1] = new BufferControlBlock(1, off + buffer_size, 0);
+  }
 
   // The current buffer being inserted to
   inline uint8_t cur_which() { return which_buf; }
@@ -59,12 +63,36 @@ public:
     buffers[1]->first_child  = buffers[0]->first_child;
   }
 
-  /** Insert to this root and block if the root is completely full
-   * @param gt    the GutterTree this buffer is a part of
-   * @param upd   the update to write to this root
-   * @return      nothing
-   */
-  insert_ret_t insert(const GutterTree *gt, const update_t &upd);
+  inline void check_block() {
+    if (just_switched) { // only get lock and check size on switching to new buffer
+      while (true) {
+        std::unique_lock<std::mutex> lk(BufferControlBlock::buffer_ready_lock);
+        BufferControlBlock::buffer_ready.wait(lk, [this]{return buffers[which_buf]->size() < buffer_size;});
+        if (buffers[which_buf]->size() < buffer_size) {
+          lk.unlock();
+          break;
+        }
+        lk.unlock();
+      }
+      just_switched = false;
+    }
+  }
+
+  // switch to the other buffer if necessary.
+  // When we switch to the next buffer we add the current buffer
+  // to the flush_queue
+  inline void check_cur_full() {
+    if (buffers[which_buf]->size() == buffer_size) {
+      // Add the BufferControlBlock to the flush queue
+      BufferFlusher::queue_lock.lock();
+      BufferFlusher::flush_queue.push({this, which_buf});
+      BufferFlusher::queue_lock.unlock();
+      BufferFlusher::flush_ready.notify_one();
+      // Switch to the other BufferControlBlock
+      which_buf = (which_buf + 1) % 2;
+      just_switched = true;
+    }
+  }
 
   inline void print() {
     printf("Root buffer %i:\n", id);

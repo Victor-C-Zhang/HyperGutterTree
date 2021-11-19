@@ -139,29 +139,6 @@ public:
   void set_non_block(bool block);
 
   /*
-   * Function to covert char array to update_t
-   * @param src the memory location to load serialized data from
-   * @param dst the edge update to put stuff into
-   * @return nothing
-   */
-  update_t deserialize_update(char *src);
- 
-  /*
-   * Copy the serialized data from one location to another
-   * @param src data to copy from
-   * @param dst data to copy to
-   * @return nothing
-   */
-  static void copy_serial(char *src, char *dst);
-
-  /*
-   * Load a key from serialized data
-   * @param location data to pull from
-   * @return the key pulled from the data
-   */
-  static node_id_t load_key(char *location);
-
-  /*
    * Creates the entire buffer tree to produce a tree of depth log_B(N)
    */
   void setup_tree();
@@ -183,8 +160,8 @@ public:
   inline uint64_t get_file_size()    { return backing_EOF; };
   inline uint32_t get_queue_factor() { return queue_factor; };
 
-  inline int get_fd()       { return backing_store; };
-  inline char * get_cache() const { return cache; };
+  inline int get_fd()                { return backing_store; };
+  inline char * get_cache() const    { return cache; };
 
   static const uint32_t serial_update_size = sizeof(node_id_t) + sizeof(node_id_t); // size in bytes of an update
 };

@@ -284,7 +284,27 @@ void GutterTree::setup_tree() {
   // print_tree(roots, buffers);
 }
 
-inline update_t GutterTree::deserialize_update(char *src) {
+/*
+ * Function to convert an update_t to a char array
+ * @param   dst the memory location to put the serialized data
+ * @param   src the edge update
+ * @return  nothing
+ */
+inline static void serialize_update(char *dst, update_t src) {
+  node_id_t node1 = src.first;
+  node_id_t node2 = src.second;
+
+  memcpy(dst, &node1, sizeof(node_id_t));
+  memcpy(dst + sizeof(node_id_t), &node2, sizeof(node_id_t));
+}
+
+/*
+ * Function to covert char array to update_t
+ * @param src the memory location to load serialized data from
+ * @param dst the edge update to put stuff into
+ * @return nothing
+ */
+inline static update_t deserialize_update(char *src) {
   update_t dst;
   dst.first  = *((node_id_t *) src);
   dst.second = *((node_id_t *) (src + sizeof(node_id_t)));
@@ -292,15 +312,22 @@ inline update_t GutterTree::deserialize_update(char *src) {
   return dst;
 }
 
-// copy two serailized updates between two locations
-inline void GutterTree::copy_serial(char *src, char *dst) {
-  memcpy(dst, src, serial_update_size);
+/*
+ * Copy the serialized data from one location to another
+ * @param src data to copy from
+ * @param dst data to copy to
+ * @return nothing
+ */
+inline static void copy_serial(char *src, char *dst) {
+  memcpy(dst, src, GutterTree::serial_update_size);
 }
 
 /*
- * Load a key from a given location
+ * Load a key from serialized data
+ * @param location data to pull from
+ * @return the key pulled from the data
  */
-inline node_id_t GutterTree::load_key(char *location) {
+inline static node_id_t load_key(char *location) {
   node_id_t key;
   memcpy(&key, location, sizeof(node_id_t));
   return key;
@@ -336,7 +363,14 @@ insert_ret_t GutterTree::insert(const update_t &upd) {
   RootControlBlock *root = roots[root_id];
   // printf("Insertion to buffer %i of size %llu\n", r_id, root->size());
 
-  root->insert(this, upd);
+  root->check_block(); // check if this insertion needs to be blocked
+  BufferControlBlock *bcb = root->get_buf(root->cur_which());
+  char *write_loc = cache + bcb->size() + bcb->offset();
+  serialize_update(write_loc, upd);
+
+  // Advance the size of the root and check if it's full
+  bcb->set_size(bcb->size() + serial_update_size);
+  root->check_cur_full(); // check if we need to switch to the other buffer
 }
 
 /*
