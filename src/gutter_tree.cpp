@@ -427,7 +427,7 @@ flush_ret_t inline GutterTree::flush_internal_node(flush_struct &flush_from, Buf
 
     do_flush(flush_from, data_size, bcb->first_child, bcb->min_key, bcb->max_key, bcb->children_num, bcb->level);
     return;
-  } 
+  }
 
   // sub level 0 flush
   uint32_t data_to_read = bcb->size();

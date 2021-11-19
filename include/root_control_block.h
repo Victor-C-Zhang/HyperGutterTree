@@ -32,13 +32,15 @@ public:
    * @param buf_size   The GutterTree this root is a component of
    * @return           A new RootControlBlock
    */
-  RootControlBlock(buffer_id_t id, uint32_t off, uint32_t buf_size);
+  RootControlBlock(buffer_id_t id, File_Pointer off, uint32_t buf_size);
 
   // The current buffer being inserted to
   inline uint8_t cur_which() { return which_buf; }
 
   // one of the buffers in particular
   inline BufferControlBlock *get_buf(uint8_t which) { return buffers[which]; }
+
+  inline buffer_id_t get_id() { return id; }
 
   /** Synchronization functions. Should be called when root buffers are read or written to.
    * Other buffers should not require synchronization
