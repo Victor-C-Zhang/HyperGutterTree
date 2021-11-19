@@ -2,7 +2,7 @@
 #include "../include/gutter_tree.h"
 #include <cstring>
 
-RootControlBlock::RootControlBlock(buffer_id_t id, uint32_t off, uint32_t buf_size) :
+RootControlBlock::RootControlBlock(buffer_id_t id, File_Pointer off, uint32_t buf_size) :
  id(id), buffer_size(buf_size) {
   buffers[0] = new BufferControlBlock(0, off, 0);
   buffers[1] = new BufferControlBlock(1, off + buffer_size, 0);
