@@ -203,22 +203,33 @@ void GutterTree::setup_tree() {
   double total = num_nodes;
   node_id_t key  = 0;
   for (uint32_t i = 0; i < fanout; i++) {
-    RootControlBlock *rcb = new RootControlBlock(i, size, buffer_size);
+    // set min_key and max_key to be appropriate based upon the keys allocated to roots
+    // and the fanout. (example: if we have fanout = 3 and 10 keys, roots are: 0-3, 4-6, 7-9)
+    buffer_id_t first_key = key;
+    key += ceil(total / (fanout - i));
+    buffer_id_t second_key = key - 1;
+    total -= ceil(total / (fanout - i));
+    
+    RootControlBlock *rcb;
+    if (first_key == second_key)
+      rcb = new RootControlBlock(i, size, leaf_size);
+    else
+      rcb = new RootControlBlock(i, size, buffer_size);
+
     // get the first BufferControlBlock within the root and update that
     // We will update the other bcb at the end of this process
     BufferControlBlock *bcb = rcb->get_buf(0);
+    bcb->min_key = first_key;
+    bcb->max_key = second_key;
 
-    // set min_key and max_key to be appropriate based upon the keys allocated to roots
-    // and the fanout. (example: if we have fanout = 3 and 10 keys, roots are: 0-3, 4-6, 7-9)
-    bcb->min_key = key;
-    key += ceil(total / (fanout - i));
-    bcb->max_key = key - 1;
-
-    total -= ceil(total / (fanout - i));
-    if (bcb->min_key != bcb->max_key)
+    if (bcb->min_key != bcb->max_key) {
       bfs_queue.push(bcb); // need to process this rcb's children
+      size += buffer_size * 2;
+    }
+    else {
+      size += leaf_size * 2; // keep two buffers of size buffer_size for each root
+    }
 
-    size += buffer_size * 2; // keep two buffers of size buffer_size for each root
     roots.push_back(rcb);
   }
 

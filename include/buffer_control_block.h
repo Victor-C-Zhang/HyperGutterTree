@@ -19,7 +19,7 @@ private:
   const buffer_id_t id;
 
   // how many items are currently in the buffer
-  std::atomic<File_Pointer> storage_ptr;
+  File_Pointer storage_ptr;
 
   // where in the file is our data stored
   const File_Pointer file_offset;
@@ -78,7 +78,7 @@ public:
 
   inline void print() {
     printf("buffer %u: storage_ptr = %lu, offset = %lu, min_key=%u, max_key=%u, first_child=%u, #children=%u, level=%u\n", 
-      id, storage_ptr.load(), file_offset, min_key, max_key, first_child, children_num, level);
+      id, storage_ptr, file_offset, min_key, max_key, first_child, children_num, level);
   }
 
   static std::condition_variable buffer_ready;

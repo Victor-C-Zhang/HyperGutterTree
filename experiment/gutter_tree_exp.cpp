@@ -135,7 +135,7 @@ TEST(GT_Throughput, 2_18Experiment) {
   const int branch           = 512;
   const int threads          = 10;
   const int flushers         = 2;
-  const float gut_factor     = 2;
+  const float gut_factor     = 1;
 
   run_test(nodes, num_updates, buf_exp, branch, threads, flushers, gut_factor);
 }
@@ -147,7 +147,7 @@ TEST(GT_Throughput, 2_19Experiment) {
   const int branch           = 512;
   const int threads          = 10;
   const int flushers         = 2;
-  const float gut_factor     = 2;
+  const float gut_factor     = 1;
 
   run_test(nodes, num_updates, buf_exp, branch, threads, flushers, gut_factor);
 }
