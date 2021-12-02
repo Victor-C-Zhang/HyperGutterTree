@@ -370,7 +370,7 @@ insert_ret_t GutterTree::insert(const update_t &upd) {
   
   // first calculate which of the roots we're inserting to
   node_id_t key = upd.first;
-  buffer_id_t r_id = which_child(key, 0, num_nodes-1, fanout);
+  buffer_id_t root_id = which_child(key, 0, num_nodes-1, fanout);
   RootControlBlock *root = roots[root_id];
   // printf("Insertion to buffer %i of size %llu\n", r_id, root->size());
 
