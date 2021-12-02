@@ -1,4 +1,6 @@
-cmake_minimum_required(VERSION 3.5)
+cmake_minimum_required(VERSION 3.15)
+include(ExternalProject)
+
 project(GutterTree)
 
 set(CMAKE_CXX_STANDARD 11)
@@ -62,6 +64,25 @@ if(NOT GTest_FOUND)
   endif()
 endif()
 
+# Include common components
+ExternalProject_Add(
+    GraphZeppelinCommon
+
+    PREFIX          GraphZeppelinCommon
+    GIT_REPOSITORY  "https://github.com/GraphStreamingProject/GraphZeppelinCommon.git"
+    GIT_TAG         "main"
+
+    BUILD_ALWAYS    ON
+    INSTALL_DIR     ${CMAKE_CURRENT_BINARY_DIR}/GraphZeppelinCommon/prefix
+
+    CMAKE_CACHE_ARGS
+    -DAUTODOWNLOAD:BOOL=ON
+    -DCMAKE_INSTALL_PREFIX:PATH=<INSTALL_DIR>
+
+    BUILD_COMMAND ${CMAKE_COMMAND} --build <BINARY_DIR> --target install
+)
+include_directories(${CMAKE_CURRENT_BINARY_DIR}/GraphZeppelinCommon/prefix/include)
+
 add_library(GutterTree
     include/buffering_system.h
     src/gutter_tree.cpp
@@ -107,6 +128,7 @@ add_executable(buffering_tests
   test/gutter_tree_test.cpp
   test/standalone_gutters_test.cpp)
 target_link_libraries(buffering_tests PRIVATE GTest::gtest GutterTree)
+add_dependencies(buffering_tests GraphZeppelinCommon)
 # optimize unless debug
 if (DEFINED ENV{DEBUG})
   message("Disabling optimizations and enabling debug symbols")

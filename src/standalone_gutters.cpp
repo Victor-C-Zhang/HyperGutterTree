@@ -69,7 +69,7 @@ insert_ret_t StandAloneGutters::insert(const update_t &upd) {
   if (ptr.size() == buffer_size) { // full, so request flush
     ptr[0] = buffer_size;
     flush(ptr.data(), buffer_size*sizeof(node_id_t));
-    Node i = ptr[1];
+    node_id_t i = ptr[1];
     ptr.clear();
     ptr.push_back(first_idx);
     ptr.push_back(i);
@@ -95,7 +95,7 @@ bool StandAloneGutters::get_data(data_ret_t &data) {
     return false; // we got no data so return not valid
 
   // assume the first key is correct so extract it
-  Node key = serial_data[1];
+  node_id_t key = serial_data[1];
   data.first = key;
 
   data.second.clear(); // remove any old data from the vector
@@ -115,7 +115,7 @@ flush_ret_t StandAloneGutters::force_flush() {
     if (buffer.size() != first_idx) { // have stuff to flush
       buffer[0] = buffer.size();
       flush(buffer.data(), buffer[0]*sizeof(node_id_t));
-      Node i = buffer[1];
+      node_id_t i = buffer[1];
       buffer.clear();
       buffer.push_back(0);
       buffer.push_back(i);
