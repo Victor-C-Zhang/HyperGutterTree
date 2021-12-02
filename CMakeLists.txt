@@ -97,6 +97,7 @@ add_library(GutterTree
     include/work_queue.h
     include/types.h)
 target_link_libraries(GutterTree PRIVATE GTest::gtest)
+add_dependencies(GutterTree GraphZeppelinCommon)
 # optimize unless debug
 if (DEFINED ENV{DEBUG})
   message("Disabling optimizations and enabling debug symbols")
