@@ -53,7 +53,7 @@ void BufferControlBlock::validate_write(char *data, uint32_t size) {
   printf("Warning: Validating write should only be used for testing\n");
 
   while(data - data_start < size) {
-    Node key = *((Node *) data);
+    node_id_t key = *((node_id_t *) data);
     if (key < min_key || key > max_key) {
       printf("ERROR: Validate Write: incorrect key %lu --> ", key); print();
       throw KeyIncorrectError();

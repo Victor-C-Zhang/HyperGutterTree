@@ -20,10 +20,10 @@ void querier(StandAloneGutters *gutters, int nodes) {
   while(true) {
     bool valid = gutters->get_data(data);
     if (valid) {
-      Node key = data.first;
-      std::vector<Node> updates = data.second;
+      node_id_t key = data.first;
+      std::vector<node_id_t> updates = data.second;
       // verify that the updates are all between the correct nodes
-      for (Node upd : updates) {
+      for (auto upd : updates) {
         // printf("edge to %d\n", upd.first);
         ASSERT_EQ(nodes - (key + 1), upd) << "key " << key;
         upd_processed += 1;
