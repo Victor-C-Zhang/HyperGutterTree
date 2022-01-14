@@ -52,7 +52,7 @@ ExternalProject_Add(
     -DAUTODOWNLOAD:BOOL=ON
     -DCMAKE_INSTALL_PREFIX:PATH=<INSTALL_DIR>
 
-    BUILD_COMMAND ${CMAKE_COMMAND} --build <BINARY_DIR> --target install
+    BUILD_COMMAND ${CMAKE_COMMAND} --build <BINARY_DIR>
 )
 include_directories(${CMAKE_CURRENT_BINARY_DIR}/GraphZeppelinCommon/prefix/include)
 
