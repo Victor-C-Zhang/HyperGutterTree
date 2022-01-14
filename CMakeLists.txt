@@ -1,5 +1,6 @@
 cmake_minimum_required(VERSION 3.15)
 include(ExternalProject)
+include(FetchContent)
 
 project(GutterTree)
 
@@ -27,42 +28,14 @@ endif()
 message("${CMAKE_MODULE_PATH}")
 include("DownloadProject.cmake")
 
-#Find or download GTest
-find_package(GTest CONFIG)
-if(NOT GTest_FOUND)
-  if(NOT AUTODOWNLOAD)
-    message(FATAL_ERROR "GTest config not found.\n"
-      "Set GTest_DIR to a directory containing one of \n"
-      "  GTestConfig.cmake\n"
-      "  gtest-config.cmake\n"
-      "or use -DAUTODOWNLOAD:BOOL=ON to automatically download")
-  else()
-    #Download googletest
-    download_project(
-      PROJ googletest
-      GIT_REPOSITORY "https://github.com/google/googletest.git"
-      GIT_TAG "release-1.10.0"
-    )
-
-    #As specified in the googletest docs, need to set
-    #gtest_force_shared_crt for windows visual studio.
-    if(CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
-      set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
-    endif()
-
-    add_subdirectory(
-      "${googletest_SOURCE_DIR}"
-      "${googletest_BINARY_DIR}"
-      EXCLUDE_FROM_ALL
-    )
-
-    #Add aliases to targets
-    add_library(GTest::gtest ALIAS gtest)
-    add_library(GTest::gtest_main ALIAS gtest_main)
-    add_library(GTest::gmock ALIAS gmock)
-    add_library(GTest::gmock_main ALIAS gmock_main)
-  endif()
-endif()
+FetchContent_Declare(
+  googletest
+  GIT_REPOSITORY https://github.com/google/googletest.git
+  GIT_TAG "release-1.11.0"
+)
+# For Windows: Prevent overriding the parent project's compiler/linker settings
+set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
+FetchContent_MakeAvailable(googletest)
 
 # Include common components
 ExternalProject_Add(
@@ -96,7 +69,7 @@ add_library(GutterTree
     src/work_queue.cpp
     include/work_queue.h
     include/types.h)
-target_link_libraries(GutterTree PRIVATE GTest::gtest)
+target_link_libraries(GutterTree PRIVATE gtest)
 add_dependencies(GutterTree GraphZeppelinCommon)
 # optimize unless debug
 if (DEFINED ENV{DEBUG})
@@ -128,7 +101,7 @@ add_executable(buffering_tests
   test/runner.cpp
   test/gutter_tree_test.cpp
   test/standalone_gutters_test.cpp)
-target_link_libraries(buffering_tests PRIVATE GTest::gtest GutterTree)
+target_link_libraries(buffering_tests PRIVATE gtest GutterTree)
 add_dependencies(buffering_tests GraphZeppelinCommon)
 # optimize unless debug
 if (DEFINED ENV{DEBUG})
@@ -146,7 +119,7 @@ add_executable(buffering_experiment
   experiment/runner.cpp
   experiment/gutter_tree_exp.cpp
   experiment/standalone_exp.cpp)
-target_link_libraries(buffering_experiment PRIVATE GTest::gtest GutterTree)
+target_link_libraries(buffering_experiment PRIVATE gtest GutterTree)
 # optimize unless debug
 if (DEFINED ENV{DEBUG})
   message("Disabling optimizations and enabling debug symbols")
