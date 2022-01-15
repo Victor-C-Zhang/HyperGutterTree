@@ -88,14 +88,3 @@ add_executable(buffering_experiment
   experiment/gutter_tree_exp.cpp
   experiment/standalone_exp.cpp)
 target_link_libraries(buffering_experiment PRIVATE GutterTree)
-
-
-#uncomment if manually installing project
-#without specifying INSTALL_PREFIX elsewhere
-#set(CMAKE_INSTALL_PREFIX ${CMAKE_CURRENT_BINARY_DIR}/GutterTree/prefix)
-
-# for use when building as an external project
-install(TARGETS GutterTree
-  ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
-  PUBLIC_HEADER DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
-)
