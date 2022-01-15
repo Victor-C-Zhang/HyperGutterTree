@@ -32,29 +32,26 @@ FetchContent_Declare(
   googletest
   GIT_REPOSITORY https://github.com/google/googletest.git
   GIT_TAG "release-1.11.0"
+
+  UPDATE_DISCONNECTED OFF
 )
 # For Windows: Prevent overriding the parent project's compiler/linker settings
-set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
-FetchContent_MakeAvailable(googletest)
+if(CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
+  set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
+endif()
 
-# Include common components
-ExternalProject_Add(
-    GraphZeppelinCommon
 
-    PREFIX          GraphZeppelinCommon
-    GIT_REPOSITORY  "https://github.com/GraphStreamingProject/GraphZeppelinCommon.git"
-    GIT_TAG         "main"
+# Common types and components
+FetchContent_Declare(
+  GraphZeppelinCommon
 
-    BUILD_ALWAYS    ON
-    INSTALL_DIR     ${CMAKE_CURRENT_BINARY_DIR}/GraphZeppelinCommon/prefix
+  GIT_REPOSITORY  "https://github.com/GraphStreamingProject/GraphZeppelinCommon.git"
+  GIT_TAG         "main"
 
-    CMAKE_CACHE_ARGS
-    -DAUTODOWNLOAD:BOOL=ON
-    -DCMAKE_INSTALL_PREFIX:PATH=<INSTALL_DIR>
-
-    BUILD_COMMAND ${CMAKE_COMMAND} --build <BINARY_DIR>
+  UPDATE_DISCONNECTED ON
 )
-include_directories(${CMAKE_CURRENT_BINARY_DIR}/GraphZeppelinCommon/prefix/include)
+
+FetchContent_MakeAvailable(googletest GraphZeppelinCommon)
 
 add_library(GutterTree
     include/buffering_system.h
@@ -69,8 +66,8 @@ add_library(GutterTree
     src/work_queue.cpp
     include/work_queue.h
     include/types.h)
-target_link_libraries(GutterTree PRIVATE gtest)
 add_dependencies(GutterTree GraphZeppelinCommon)
+target_link_libraries(GutterTree PUBLIC gtest GraphZeppelinCommon)
 # optimize unless debug
 if (DEFINED ENV{DEBUG})
   message("Disabling optimizations and enabling debug symbols")
@@ -101,8 +98,7 @@ add_executable(buffering_tests
   test/runner.cpp
   test/gutter_tree_test.cpp
   test/standalone_gutters_test.cpp)
-target_link_libraries(buffering_tests PRIVATE gtest GutterTree)
-add_dependencies(buffering_tests GraphZeppelinCommon)
+target_link_libraries(buffering_tests PRIVATE GutterTree)
 # optimize unless debug
 if (DEFINED ENV{DEBUG})
   message("Disabling optimizations and enabling debug symbols")
@@ -119,7 +115,7 @@ add_executable(buffering_experiment
   experiment/runner.cpp
   experiment/gutter_tree_exp.cpp
   experiment/standalone_exp.cpp)
-target_link_libraries(buffering_experiment PRIVATE gtest GutterTree)
+target_link_libraries(buffering_experiment PRIVATE GutterTree)
 # optimize unless debug
 if (DEFINED ENV{DEBUG})
   message("Disabling optimizations and enabling debug symbols")
