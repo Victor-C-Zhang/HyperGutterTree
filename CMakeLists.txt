@@ -50,7 +50,7 @@ FetchContent_Declare(
   GIT_REPOSITORY  "https://github.com/GraphStreamingProject/GraphZeppelinCommon.git"
   GIT_TAG         "cmake_updates"
 
-  UPDATE_DISCONNECTED ON
+  UPDATE_DISCONNECTED OFF
 )
 
 FetchContent_MakeAvailable(googletest GraphZeppelinCommon)
