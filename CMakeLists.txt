@@ -40,13 +40,12 @@ if(CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
   set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
 endif()
 
-
 # Common types and components
 FetchContent_Declare(
   GraphZeppelinCommon
 
   GIT_REPOSITORY  "https://github.com/GraphStreamingProject/GraphZeppelinCommon.git"
-  GIT_TAG         "main"
+  GIT_TAG         "cmake_updates"
 
   UPDATE_DISCONNECTED ON
 )
@@ -68,17 +67,6 @@ add_library(GutterTree
     include/types.h)
 add_dependencies(GutterTree GraphZeppelinCommon)
 target_link_libraries(GutterTree PUBLIC gtest GraphZeppelinCommon)
-# optimize unless debug
-if (DEFINED ENV{DEBUG})
-  message("Disabling optimizations and enabling debug symbols")
-  target_compile_options(GutterTree PRIVATE -g)
-else ()
-  if("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU" OR "${CMAKE_CXX_COMPILER_ID}" STREQUAL "AppleClang")
-    target_compile_options(GutterTree PRIVATE -O3)
-  elseif("${CMAKE_CXX_COMPILER_ID}" STREQUAL "MSVC")
-    target_compile_options(GutterTree PRIVATE /O2)
-  endif()
-endif()
 # different OSes have different ways of efficiently pre-allocating large files
 if (UNIX AND NOT APPLE)
   message("Enabling Fallocate for a linux system")
@@ -90,43 +78,19 @@ else()
   message("Using fcntl for an Apple or other unknown system")
   target_compile_options(GutterTree PRIVATE -DPOSIX_FCNTL)
 endif ()
-set_target_properties(GutterTree PROPERTIES PUBLIC_HEADER 
-  "include/gutter_tree.h;include/buffer_control_block.h;include/standalone_gutters.h;include/buffer_flusher.h;include/work_queue.h;include/types.h;include/buffering_system.h"
-)
+target_include_directories(GutterTree PUBLIC include/)
 
 add_executable(buffering_tests
   test/runner.cpp
   test/gutter_tree_test.cpp
   test/standalone_gutters_test.cpp)
 target_link_libraries(buffering_tests PRIVATE GutterTree)
-# optimize unless debug
-if (DEFINED ENV{DEBUG})
-  message("Disabling optimizations and enabling debug symbols")
-  target_compile_options(buffering_tests PRIVATE -g)
-else ()
-  if("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU" OR "${CMAKE_CXX_COMPILER_ID}" STREQUAL "AppleClang")
-    target_compile_options(buffering_tests PRIVATE -O3)
-  elseif("${CMAKE_CXX_COMPILER_ID}" STREQUAL "MSVC")
-    target_compile_options(buffering_tests PRIVATE /O2)
-  endif()
-endif ()
 
 add_executable(buffering_experiment
   experiment/runner.cpp
   experiment/gutter_tree_exp.cpp
   experiment/standalone_exp.cpp)
 target_link_libraries(buffering_experiment PRIVATE GutterTree)
-# optimize unless debug
-if (DEFINED ENV{DEBUG})
-  message("Disabling optimizations and enabling debug symbols")
-  target_compile_options(buffering_experiment PRIVATE -g)
-else ()
-  if("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU" OR "${CMAKE_CXX_COMPILER_ID}" STREQUAL "AppleClang")
-    target_compile_options(buffering_experiment PRIVATE -O3)
-  elseif("${CMAKE_CXX_COMPILER_ID}" STREQUAL "MSVC")
-    target_compile_options(buffering_experiment PRIVATE /O2)
-  endif()
-endif ()
 
 
 #uncomment if manually installing project
