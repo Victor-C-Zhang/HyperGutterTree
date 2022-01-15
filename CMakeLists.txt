@@ -9,8 +9,14 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS ON)
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${PROJECT_BINARY_DIR}/lib)
 
-#Uncomment to enable debug
-#set(ENV{DEBUG} ON)
+# Make the default build type Release. If user or another
+# project sets a different value than use that
+if(NOT CMAKE_BUILD_TYPE)
+  message(STATUS "Setting build type to default -- Release")
+  set(CMAKE_BUILD_TYPE "Release" CACHE
+      STRING "Choose the type of build." FORCE)
+endif()
+message(STATUS "GutterTree Build Type: ${CMAKE_BUILD_TYPE}")
 
 if("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU")
   message(STATUS "Adding GNU compiler flags")
