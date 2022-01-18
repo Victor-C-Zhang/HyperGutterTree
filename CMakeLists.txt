@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.15)
-include(ExternalProject)
+include(FetchContent)
 
 project(GutterTree)
 
@@ -8,80 +8,51 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS ON)
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${PROJECT_BINARY_DIR}/lib)
 
-#Uncomment to enable debug
-#set(ENV{DEBUG} ON)
+# Make the default build type Release. If user or another
+# project sets a different value than use that
+if(NOT CMAKE_BUILD_TYPE)
+  message(STATUS "Setting build type to default -- Release")
+  set(CMAKE_BUILD_TYPE "Release" CACHE
+      STRING "Choose the type of build." FORCE)
+endif()
+message(STATUS "GutterTree Build Type: ${CMAKE_BUILD_TYPE}")
 
 if("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU")
-  message("Adding GNU compiler flags")
+  message(STATUS "Adding GNU compiler flags")
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -W -Wall")
 elseif("${CMAKE_CXX_COMPILER_ID}" STREQUAL "MSVC")
-  message("Adding MSVC compiler flags")
+  message(STATUS "Adding MSVC compiler flags")
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /Wall")
 elseif("${CMAKE_CXX_COMPILER_ID}" STREQUAL "AppleClang")
-  message("Adding AppleClang compiler flags")
+  message(STATUS "Adding AppleClang compiler flags")
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -W -Wall")
 else()
-  message("${CMAKE_CXX_COMPILER_ID} not recognized, no flags added")
+  message(STATUS "${CMAKE_CXX_COMPILER_ID} not recognized, no flags added")
 endif()
 
-message("${CMAKE_MODULE_PATH}")
-include("DownloadProject.cmake")
+FetchContent_Declare(
+  googletest
+  GIT_REPOSITORY https://github.com/google/googletest.git
+  GIT_TAG "release-1.11.0"
 
-#Find or download GTest
-find_package(GTest CONFIG)
-if(NOT GTest_FOUND)
-  if(NOT AUTODOWNLOAD)
-    message(FATAL_ERROR "GTest config not found.\n"
-      "Set GTest_DIR to a directory containing one of \n"
-      "  GTestConfig.cmake\n"
-      "  gtest-config.cmake\n"
-      "or use -DAUTODOWNLOAD:BOOL=ON to automatically download")
-  else()
-    #Download googletest
-    download_project(
-      PROJ googletest
-      GIT_REPOSITORY "https://github.com/google/googletest.git"
-      GIT_TAG "release-1.10.0"
-    )
-
-    #As specified in the googletest docs, need to set
-    #gtest_force_shared_crt for windows visual studio.
-    if(CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
-      set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
-    endif()
-
-    add_subdirectory(
-      "${googletest_SOURCE_DIR}"
-      "${googletest_BINARY_DIR}"
-      EXCLUDE_FROM_ALL
-    )
-
-    #Add aliases to targets
-    add_library(GTest::gtest ALIAS gtest)
-    add_library(GTest::gtest_main ALIAS gtest_main)
-    add_library(GTest::gmock ALIAS gmock)
-    add_library(GTest::gmock_main ALIAS gmock_main)
-  endif()
-endif()
-
-# Include common components
-ExternalProject_Add(
-    GraphZeppelinCommon
-
-    PREFIX          GraphZeppelinCommon
-    GIT_REPOSITORY  "https://github.com/GraphStreamingProject/GraphZeppelinCommon.git"
-    GIT_TAG         "main"
-
-    BUILD_ALWAYS    ON
-    INSTALL_DIR     ${CMAKE_CURRENT_BINARY_DIR}/GraphZeppelinCommon/prefix
-
-    CMAKE_CACHE_ARGS
-    -DAUTODOWNLOAD:BOOL=ON
-    -DCMAKE_INSTALL_PREFIX:PATH=<INSTALL_DIR>
-
-    BUILD_COMMAND ${CMAKE_COMMAND} --build <BINARY_DIR> --target install
+  UPDATE_DISCONNECTED OFF
 )
-include_directories(${CMAKE_CURRENT_BINARY_DIR}/GraphZeppelinCommon/prefix/include)
+# For Windows: Prevent overriding the parent project's compiler/linker settings
+if(CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
+  set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
+endif()
+
+# Common types and components
+FetchContent_Declare(
+  GraphZeppelinCommon
+
+  GIT_REPOSITORY  "https://github.com/GraphStreamingProject/GraphZeppelinCommon.git"
+  GIT_TAG         "main"
+
+  UPDATE_DISCONNECTED OFF
+)
+
+FetchContent_MakeAvailable(googletest GraphZeppelinCommon)
 
 add_library(GutterTree
     include/buffering_system.h
@@ -96,76 +67,29 @@ add_library(GutterTree
     src/work_queue.cpp
     include/work_queue.h
     include/types.h)
-target_link_libraries(GutterTree PRIVATE GTest::gtest)
 add_dependencies(GutterTree GraphZeppelinCommon)
-# optimize unless debug
-if (DEFINED ENV{DEBUG})
-  message("Disabling optimizations and enabling debug symbols")
-  target_compile_options(GutterTree PRIVATE -g)
-else ()
-  if("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU" OR "${CMAKE_CXX_COMPILER_ID}" STREQUAL "AppleClang")
-    target_compile_options(GutterTree PRIVATE -O3)
-  elseif("${CMAKE_CXX_COMPILER_ID}" STREQUAL "MSVC")
-    target_compile_options(GutterTree PRIVATE /O2)
-  endif()
-endif()
+target_link_libraries(GutterTree PUBLIC gtest GraphZeppelinCommon)
 # different OSes have different ways of efficiently pre-allocating large files
 if (UNIX AND NOT APPLE)
-  message("Enabling Fallocate for a linux system")
+  message(STATUS "Enabling Fallocate for a linux system")
   target_compile_options(GutterTree PRIVATE -DLINUX_FALLOCATE)
 elseif(WIN32)
-  message("Using fileapi for Windows")
+  message(STATUS "Using fileapi for Windows")
   target_compile_options(GutterTree PRIVATE -DWINDOWS_FILEAPI)
 else()
-  message("Using fcntl for an Apple or other unknown system")
+  message(STATUS "Using fcntl for an Apple or other unknown system")
   target_compile_options(GutterTree PRIVATE -DPOSIX_FCNTL)
 endif ()
-set_target_properties(GutterTree PROPERTIES PUBLIC_HEADER 
-  "include/gutter_tree.h;include/buffer_control_block.h;include/standalone_gutters.h;include/buffer_flusher.h;include/work_queue.h;include/types.h;include/buffering_system.h"
-)
+target_include_directories(GutterTree PUBLIC include/)
 
 add_executable(buffering_tests
   test/runner.cpp
   test/gutter_tree_test.cpp
   test/standalone_gutters_test.cpp)
-target_link_libraries(buffering_tests PRIVATE GTest::gtest GutterTree)
-add_dependencies(buffering_tests GraphZeppelinCommon)
-# optimize unless debug
-if (DEFINED ENV{DEBUG})
-  message("Disabling optimizations and enabling debug symbols")
-  target_compile_options(buffering_tests PRIVATE -g)
-else ()
-  if("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU" OR "${CMAKE_CXX_COMPILER_ID}" STREQUAL "AppleClang")
-    target_compile_options(buffering_tests PRIVATE -O3)
-  elseif("${CMAKE_CXX_COMPILER_ID}" STREQUAL "MSVC")
-    target_compile_options(buffering_tests PRIVATE /O2)
-  endif()
-endif ()
+target_link_libraries(buffering_tests PRIVATE GutterTree)
 
 add_executable(buffering_experiment
   experiment/runner.cpp
   experiment/gutter_tree_exp.cpp
   experiment/standalone_exp.cpp)
-target_link_libraries(buffering_experiment PRIVATE GTest::gtest GutterTree)
-# optimize unless debug
-if (DEFINED ENV{DEBUG})
-  message("Disabling optimizations and enabling debug symbols")
-  target_compile_options(buffering_experiment PRIVATE -g)
-else ()
-  if("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU" OR "${CMAKE_CXX_COMPILER_ID}" STREQUAL "AppleClang")
-    target_compile_options(buffering_experiment PRIVATE -O3)
-  elseif("${CMAKE_CXX_COMPILER_ID}" STREQUAL "MSVC")
-    target_compile_options(buffering_experiment PRIVATE /O2)
-  endif()
-endif ()
-
-
-#uncomment if manually installing project
-#without specifying INSTALL_PREFIX elsewhere
-#set(CMAKE_INSTALL_PREFIX ${CMAKE_CURRENT_BINARY_DIR}/GutterTree/prefix)
-
-# for use when building as an external project
-install(TARGETS GutterTree
-  ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
-  PUBLIC_HEADER DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
-)
+target_link_libraries(buffering_experiment PRIVATE GutterTree)
