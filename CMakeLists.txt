@@ -70,7 +70,7 @@ ExternalProject_Add(
 
     PREFIX          GraphZeppelinCommon
     GIT_REPOSITORY  "https://github.com/GraphStreamingProject/GraphZeppelinCommon.git"
-    GIT_TAG         "main"
+    GIT_TAG         "a991989df4734cffeb068afea24825179f7d9cb2"
 
     BUILD_ALWAYS    ON
     INSTALL_DIR     ${CMAKE_CURRENT_BINARY_DIR}/GraphZeppelinCommon/prefix
