@@ -20,7 +20,7 @@ void querier(GutterTree *gt) {
   while(true) {
   bool valid = gt->get_data(data);
   if (valid) {
-    std::vector<node_id_t> updates = data.second;
+    std::vector<size_t> updates = data.second;
     // verify that the updates are all between the correct nodes
     upd_processed += updates.size();
   }
