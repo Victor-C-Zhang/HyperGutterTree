@@ -1,5 +1,6 @@
 #include "../include/gutter_tree.h"
 #include "../include/buffer_flusher.h"
+#include "../include/gt_file_errors.h"
 
 #include <utility>
 #include <unistd.h> //sysconf
@@ -46,8 +47,7 @@ GutterTree::GutterTree(std::string dir, node_id_t nodes, int workers, bool reset
   printf("opening file %s\n", file_name.c_str());
   backing_store = open(file_name.c_str(), file_flags, S_IRUSR | S_IWUSR);
   if (backing_store == -1) {
-    fprintf(stderr, "Failed to open backing storage file! error=%s\n", strerror(errno));
-    exit(1);
+    throw GTFileOpenError(strerror(errno));
   }
 
   setup_tree(); // setup the gutter tree
@@ -425,8 +425,7 @@ flush_ret_t inline GutterTree::flush_internal_node(flush_struct &flush_from, Buf
   while(data_to_read > 0) {
     int len = pread(backing_store, flush_from.read_buffers[level] + offset, data_to_read, bcb->offset() + offset);
     if (len == -1) {
-      printf("ERROR flush failed to read from buffer %i, %s\n", bcb->get_id(), strerror(errno));
-      exit(EXIT_FAILURE);
+      throw GTFileReadError(strerror(errno), bcb->get_id());
     }
     data_to_read -= len;
     offset += len;
@@ -450,8 +449,7 @@ flush_ret_t inline GutterTree::flush_leaf_node(flush_struct &flush_from, BufferC
   while(data_to_read > 0) {
     int len = pread(backing_store, flush_from.read_buffers[level] + offset, data_to_read, bcb->offset() + offset);
     if (len == -1) {
-      printf("ERROR flush failed to read from buffer %i, %s\n", bcb->get_id(), strerror(errno));
-      exit(EXIT_FAILURE);
+      throw GTFileReadError(strerror(errno), bcb->get_id());
     }
     data_to_read -= len;
     offset += len;

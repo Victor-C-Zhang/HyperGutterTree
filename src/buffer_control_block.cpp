@@ -1,5 +1,6 @@
 #include "../include/buffer_control_block.h"
 #include "../include/gutter_tree.h"
+#include "../include/gt_file_errors.h"
 
 #include <unistd.h>
 #include <errno.h>
@@ -30,8 +31,7 @@ bool BufferControlBlock::write(GutterTree *gt, char *data, uint32_t size) {
   int w = 0;
   while(len < (int32_t)size) {
     if (len == -1) {
-      printf("ERROR: write to buffer %i failed %s\n", id, strerror(errno));
-      exit(EXIT_FAILURE);
+      throw GTFileWriteError(strerror(errno), id);
     }
     w    += len;
     size -= len;

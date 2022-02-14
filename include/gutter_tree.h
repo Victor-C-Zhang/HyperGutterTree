@@ -28,7 +28,8 @@ private:
   flush_struct *flush_data;
 
   /*
-   * Functions for flushing the roots of our subtrees and for the BufferFlushers to call
+   * Functions for flushing the roots of our subtrees and for the BufferFlushers to call.
+   * Throws GTFileReadError if there is an error reading from a buffer.
    */
   flush_ret_t flush_internal_node(flush_struct &flush_from, BufferControlBlock *bcb);
   flush_ret_t flush_leaf_node(flush_struct &flush_from, BufferControlBlock *bcb);
@@ -90,9 +91,11 @@ public:
    * Generates a new homebrew buffer tree.
    * @param dir     file path of the data structure root directory, relative to
    *                the executing workspace.
-   * @param nodes   number of nodes in the graph
-   * @param workers the number of workers which will be using this buffer tree (defaults to 1)
-   * @param reset   should truncate the file storage upon opening
+   * @param nodes   number of nodes in the graph.
+   * @param workers the number of workers which will be using this buffer tree (defaults to 1).
+   * @param reset   should truncate the file storage upon opening.
+   * 
+   * @throw GTFileOpenError if the backing file cannot be opened.
    */
   GutterTree(std::string dir, node_id_t nodes, int workers, bool reset);
   ~GutterTree();
@@ -121,6 +124,8 @@ public:
    * Functions for flushing bcbs or subtrees of the graph
    * @param flush_from      The memory to use when flushing - associated with a given thread
    * @param bcb             The buffer_control_block to flush
+   * 
+   * @throw GTFileReadError if there is an error reading from a buffer.
    */
   flush_ret_t flush_subtree(flush_struct &flush_from, BufferControlBlock *bcb);
   flush_ret_t flush_control_block(flush_struct &flush_from, BufferControlBlock *bcb);
