@@ -30,6 +30,16 @@ else()
   message(STATUS "${CMAKE_CXX_COMPILER_ID} not recognized, no flags added")
 endif()
 
+# Check if this project is the top directory or build type is Debug
+# If so, build executables, otherwise, only build libraries
+get_directory_property(not_root PARENT_DIRECTORY)
+if (not_root AND "${CMAKE_BUILD_TYPE}" STREQUAL "Release")
+  set(BUILD_EXE OFF)
+else()
+  set(BUILD_EXE ON)
+  message (STATUS "GutterTree building executables")
+endif()
+
 FetchContent_Declare(
   googletest
   GIT_REPOSITORY https://github.com/google/googletest.git
@@ -82,14 +92,16 @@ else()
 endif ()
 target_include_directories(GutterTree PUBLIC include/)
 
-add_executable(buffering_tests
-  test/runner.cpp
-  test/gutter_tree_test.cpp
-  test/standalone_gutters_test.cpp)
-target_link_libraries(buffering_tests PRIVATE GutterTree)
+if (BUILD_EXE)
+  add_executable(buffering_tests
+    test/runner.cpp
+    test/gutter_tree_test.cpp
+    test/standalone_gutters_test.cpp)
+  target_link_libraries(buffering_tests PRIVATE GutterTree)
 
-add_executable(buffering_experiment
-  experiment/runner.cpp
-  experiment/gutter_tree_exp.cpp
-  experiment/standalone_exp.cpp)
-target_link_libraries(buffering_experiment PRIVATE GutterTree)
+  add_executable(buffering_experiment
+    experiment/runner.cpp
+    experiment/gutter_tree_exp.cpp
+    experiment/standalone_exp.cpp)
+  target_link_libraries(buffering_experiment PRIVATE GutterTree)
+endif()
