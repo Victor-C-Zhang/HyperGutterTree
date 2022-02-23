@@ -63,10 +63,10 @@ bool CacheGutterTree::get_data(data_ret_t &data) {
 }
 
 void CacheGutterTree::set_non_block(bool block){
-    if (block) {
-      wq.no_block = true;  // circular queue operations should no longer block
-      wq.wq_empty.notify_all();
-    } else {
-      wq.no_block = false;  // set circular queue to block if necessary
-    }
+  if (block) {
+    wq.no_block = true;  // circular queue operations should no longer block
+    wq.wq_empty.notify_all();
+  } else {
+    wq.no_block = false;  // set circular queue to block if necessary
   }
+}
