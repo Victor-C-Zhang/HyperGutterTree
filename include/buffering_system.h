@@ -22,13 +22,13 @@ protected:
    * Queue_Factor :   The number of queue slots per worker removing data from the queue
    * Size_Factor  :   Decrease the amount of bytes used per node by this multiplicative factor
    */
-  void configure_system();
+  static void configure_system();
 
   // various parameters utilized by the buffering systems
-  uint32_t page_size;    // write granularity
-  uint32_t buffer_size;  // size of an internal node buffer
-  uint32_t fanout;       // maximum number of children per node
-  uint32_t queue_factor; // number of elements in queue is this factor * num_workers
-  uint32_t num_flushers; // the number of flush threads
-  float gutter_factor;   // factor which increases/decreases the leaf gutter size
+  static uint32_t page_size;    // write granularity
+  static uint32_t buffer_size;  // size of an internal node buffer
+  static uint32_t fanout;       // maximum number of children per node
+  static uint32_t queue_factor; // number of elements in queue is this factor * num_workers
+  static uint32_t num_flushers; // the number of flush threads
+  static float gutter_factor;   // factor which increases/decreases the leaf gutter size
 };

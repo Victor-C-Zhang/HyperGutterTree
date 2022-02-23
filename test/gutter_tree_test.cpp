@@ -16,7 +16,7 @@ static std::atomic<uint32_t> upd_processed;
 // queries the buffer tree and verifies that the data
 // returned makes sense
 // Should be run in a seperate thread
-void querier(GutterTree *gt, int nodes) {
+static void querier(GutterTree *gt, int nodes) {
   data_ret_t data;
   while(true) {
     bool valid = gt->get_data(data);
@@ -35,7 +35,7 @@ void querier(GutterTree *gt, int nodes) {
   }
 }
 
-void write_configuration(uint32_t buffer_exp, uint32_t fanout, int queue_factor, 
+static void write_configuration(uint32_t buffer_exp, uint32_t fanout, int queue_factor, 
                         int page_factor, int num_threads) {
   std::ofstream conf("./buffering.conf");
   conf << "buffer_exp=" << buffer_exp << std::endl;
@@ -50,7 +50,7 @@ void write_configuration(uint32_t buffer_exp, uint32_t fanout, int queue_factor,
 // this test only works if the depth of the tree does not exceed 1
 // and no work is claimed off of the work queue
 // to work correctly num_updates must be a multiple of nodes
-void run_test(const uint32_t nodes, const uint32_t num_updates, const int buffer_exp, const int branch_factor) {
+static void run_test(const uint32_t nodes, const uint32_t num_updates, const int buffer_exp, const int branch_factor) {
   printf("Running Test: nodes=%i num_updates=%i buffer_exp 2^%i branch_factor %i\n",
          nodes, num_updates, buffer_exp, branch_factor);
 

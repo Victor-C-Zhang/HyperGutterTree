@@ -4,6 +4,13 @@
 #include <unistd.h> //sysconf
 #include <fstream>
 
+uint32_t BufferingSystem::page_size;
+uint32_t BufferingSystem::buffer_size;
+uint32_t BufferingSystem::fanout;
+uint32_t BufferingSystem::queue_factor;
+uint32_t BufferingSystem::num_flushers;
+float BufferingSystem::gutter_factor;
+
 void BufferingSystem::configure_system() {
   // some default values
   uint32_t buffer_exp  = 20;
