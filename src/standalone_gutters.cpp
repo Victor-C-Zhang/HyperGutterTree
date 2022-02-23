@@ -6,7 +6,7 @@ const unsigned first_idx = 2;
 
 StandAloneGutters::StandAloneGutters(node_id_t num_nodes, int workers) :
 buffers(num_nodes) {
-  configure(); // read buffering configuration file
+  configure_system(); // read buffering configuration file
 
   // size of leaf proportional to size of sketch (add 2 because we have 2 metadata slots per buffer)
   uint32_t bytes_size = floor(gutter_factor * sketch_size(num_nodes)) + 2 * sizeof(node_id_t);
@@ -23,40 +23,6 @@ buffers(num_nodes) {
 
 StandAloneGutters::~StandAloneGutters() {
   delete wq;
-}
-
-// Read the configuration file to determine a variety of Buffering params
-void StandAloneGutters::configure() {
-  int queue_f  = 2;
-  float gutter_f = 1;
-
-  std::string line;
-  std::ifstream conf("./buffering.conf");
-  if (conf.is_open()) {
-    while(getline(conf, line)) {
-      if (line[0] == '#' || line[0] == '\n') continue;
-      if(line.substr(0, line.find('=')) == "queue_factor") {
-        queue_f = std::stoi(line.substr(line.find('=') + 1));
-        if (queue_f > 16 || queue_f < 1) {
-          printf("WARNING: queue_factor out of bounds [1,16] using default(2)\n");
-          queue_f = 2;
-        }
-      }
-      if(line.substr(0, line.find('=')) == "gutter_factor") {
-        gutter_f = std::stof(line.substr(line.find('=') + 1));
-        if (gutter_f < 1 && gutter_f > -1) {
-          printf("WARNING: gutter_factor must be outside of range -1 < x < 1 using default(1)\n");
-          gutter_f = 1;
-        }
-      }
-    }
-  } else {
-    printf("WARNING: Could not open buffering configuration file! Using default setttings.\n");
-  }
-  queue_factor  = queue_f;
-  gutter_factor = gutter_f;
-  if (gutter_factor < 0)
-    gutter_factor = 1 / (-1 * gutter_factor); // gutter factor reduces size if negative
 }
 
 void StandAloneGutters::flush(node_id_t *buffer, uint32_t num_bytes) {

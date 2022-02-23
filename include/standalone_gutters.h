@@ -19,18 +19,6 @@ private:
    * @param num_bytes   the number of bytes to flush.
    */
   void flush(node_id_t* buffer, uint32_t num_bytes);
-
-  /**
-   * Use buffering.conf configuration file to determine parameters of the StandAloneGutters
-   * Sets the following variables
-   * Queue_Factor :   The number of queue slots per worker removing data from the queue
-   * Size_Factor  :   Decrease the amount of bytes used per node by this multiplicative factor
-   */
-  void configure();
-
-  // configuration variables
-  uint32_t queue_factor; // number of elements in queue is this factor * num_workers
-  float gutter_factor;   // factor which increases/decreases the leaf gutter size
 public:
   /**
    * Constructs a new .
