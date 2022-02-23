@@ -87,17 +87,29 @@ class CacheGutterTree : public BufferingSystem {
       }
     }
 
-    void flush() {
+    void flush(bool force = false) {
       if (leafNode) {
         for (const auto &update : buffer) {
           auto &outputBuffer = outputBuffers[update.first - updateSpan.first];
           outputBuffer.push_back(update.second);
           if (outputBuffer.size() == config.bufferSize) {
-            config.wq.push(reinterpret_cast<char *>(outputBuffer.data()),
-                           config.bufferSize * sizeof(node_id_t));
+            int data_size = config.bufferSize * sizeof(node_id_t);
+            config.wq.push(reinterpret_cast<char *>(outputBuffer.data()), data_size);
             outputBuffer.clear();
             outputBuffer.push_back(updateSpan.first + update.first);
           }
+        }
+        if (force) {
+          const size_t numOutputBuffers = updateSpan.second - updateSpan.first + 1;
+          for (size_t i = 0; i < numOutputBuffers; ++i) {
+            std::vector<node_id_t> buffer = outputBuffers[i];
+            if (buffer.size() > 0) {
+              int data_size = buffer.size() * sizeof(node_id_t);
+              config.wq.push(reinterpret_cast<char *>(buffer.data()), data_size);
+              buffer.clear();
+              buffer.push_back(updateSpan.first + i);
+            }
+          }      
         }
       } else {
         const size_t spanQuanta = calculateSpanQuanta(updateSpan);
@@ -108,6 +120,13 @@ class CacheGutterTree : public BufferingSystem {
         }
       }
       buffer.clear();
+    }
+    // flush this node and all its children of any updates
+    void flush_tree() {
+      flush(true);
+      for (auto child : childNodes) {
+        child.flush_tree();
+      }
     }
   };
   uint32_t bytes_size; // size of leaf in bytes
@@ -174,7 +193,7 @@ class CacheGutterTree : public BufferingSystem {
    * Flushes all pending buffers.
    * @return nothing.
    */
-  flush_ret_t force_flush() { root.flush(); }
+  flush_ret_t force_flush() { root.flush_tree(); }
 
   /**
    * Notifies all threads waiting on condition variables that they should
