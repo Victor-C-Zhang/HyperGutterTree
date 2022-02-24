@@ -61,8 +61,8 @@ class CacheGutterTree : public BufferingSystem {
     }
 
     CacheGutterTreeNode(std::pair<size_t, size_t> updateSpan, size_t level,
-                             const CacheGutterTreeConfig &config) : config(config),
-                             updateSpan(updateSpan), buffer(), leafNode(level == config.numLevels) {
+                        const CacheGutterTreeConfig &config) : config(config),
+                        updateSpan(updateSpan), buffer(), leafNode(level == config.numLevels) {
       buffer.reserve(maxOccupancy);
       if (leafNode) {
         const size_t numOutputBuffers = updateSpan.second - updateSpan.first + 1;

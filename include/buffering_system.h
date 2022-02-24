@@ -15,11 +15,9 @@ public:
     return 42 * sizeof(node_id_t) * pow(log2(num_nodes), 2) / (log2(3) - 1); 
   }
 protected:
-    /**
+  /*
    * Use buffering.conf configuration file to determine parameters of the buffering system
-   * Sets the variables below
-   * Queue_Factor :   The number of queue slots per worker removing data from the queue
-   * Size_Factor  :   Decrease the amount of bytes used per node by this multiplicative factor
+   * Sets the parameters listed below
    */
   static void configure_system();
 

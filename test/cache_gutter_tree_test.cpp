@@ -125,10 +125,10 @@ TEST(CacheGutterTree, AsAbstract) {
 // test designed to stress test a small number of buffers
 TEST(CacheGutterTree, HitNodePairs) {
   const int nodes       = 32;
-  const int full_buffer = floor(24 * pow(log2(nodes), 3)) / sizeof(node_id_t);
+  const int full_buffer = BufferingSystem::sketch_size(nodes) / sizeof(node_id_t);
   const int num_updates = 20 * full_buffer;
 
-  write_configuration(8, 8); // 8 is queue_factor, 8 is gutter_factor (small gutters to stress test)
+  write_configuration(8, 8); // 8 is queue_factor, -8 is gutter_factor (small gutters)
 
   CacheGutterTree *cache_tree = new CacheGutterTree(nodes, 1); // 1 is the number of workers
   shutdown = false;
@@ -159,7 +159,7 @@ TEST(CacheGutterTree, ManyQueryThreads) {
 
   // here we limit the number of slots in the circular queue to 
   // create contention between the threads. (we pass 5 threads and queue factor =1 instead of 20,8)
-  write_configuration(1, 8); // 1 is queue_factor, 8 is gutter_factor
+  write_configuration(1, -8); // 1 is queue_factor, -8 is gutter_factor
 
   CacheGutterTree *cache_tree = new CacheGutterTree(nodes, 5); // 5 is the number of workers
   shutdown = false;
