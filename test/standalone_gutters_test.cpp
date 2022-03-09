@@ -159,7 +159,7 @@ TEST(StandAloneGutters, ManyQueryThreads) {
 
   // here we limit the number of slots in the circular queue to 
   // create contention between the threads. (we pass 5 threads and queue factor =1 instead of 20,8)
-  write_configuration(1, 8); // 1 is queue_factor, 8 is gutter_factor
+  write_configuration(1, 1); // 1 is queue_factor, 1 is gutter_factor
 
   StandAloneGutters *gutters = new StandAloneGutters(nodes, 5); // 5 is the number of workers
   shutdown = false;
@@ -183,5 +183,42 @@ TEST(StandAloneGutters, ManyQueryThreads) {
     query_threads[t].join();
   }
   ASSERT_EQ(num_updates, upd_processed);
+  delete gutters;
+}
+
+TEST(StandAloneGutters, FlushAndInsertAgain) {
+  const int nodes       = 1024;
+  const int num_updates = 10000;
+  const int num_flushes = 5;
+
+  write_configuration(2, 8); // 2 is queue_factor, 8 is gutter_factor
+
+  StandAloneGutters *gutters = new StandAloneGutters(nodes, 2); // 2 is the number of workers
+  shutdown = false;
+  upd_processed = 0;
+  std::thread query_threads[2];
+  for (int t = 0; t < 2; t++) {
+    query_threads[t] = std::thread(querier, gutters, nodes);
+  }
+  
+  for (int f = 0; f < num_flushes; f++) {
+    for (int i = 0; i < num_updates; i++) {
+      update_t upd;
+      upd.first = i % nodes;
+      upd.second = (nodes - 1) - (i % nodes);
+      gutters->insert(upd);
+    }
+    gutters->force_flush();
+  }
+
+  // flush again to ensure that doesn't cause problems
+  gutters->force_flush();
+  shutdown = true;
+  gutters->set_non_block(true); // switch to non-blocking calls in an effort to exit
+
+  for (int t = 0; t < 2; t++) {
+    query_threads[t].join();
+  }
+  ASSERT_EQ(num_updates * num_flushes, upd_processed);
   delete gutters;
 }
