@@ -18,7 +18,7 @@ private:
    * @param buffer      a pointer to the head of the buffer to flush.
    * @param num_bytes   the number of bytes to flush.
    */
-  void flush(node_id_t* buffer, uint32_t num_bytes);
+  void flush(std::vector<node_id_t> &buffer, uint32_t num_bytes);
 public:
   /**
    * Constructs a new .

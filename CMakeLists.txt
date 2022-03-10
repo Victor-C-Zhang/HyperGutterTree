@@ -43,9 +43,7 @@ endif()
 FetchContent_Declare(
   googletest
   GIT_REPOSITORY https://github.com/google/googletest.git
-  GIT_TAG "release-1.11.0"
-
-  UPDATE_DISCONNECTED OFF
+  GIT_TAG        release-1.11.0
 )
 # For Windows: Prevent overriding the parent project's compiler/linker settings
 if(CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
@@ -56,10 +54,8 @@ endif()
 FetchContent_Declare(
   GraphZeppelinCommon
 
-  GIT_REPOSITORY  "https://github.com/GraphStreamingProject/GraphZeppelinCommon.git"
-  GIT_TAG         "main"
-
-  UPDATE_DISCONNECTED OFF
+  GIT_REPOSITORY  https://github.com/GraphStreamingProject/GraphZeppelinCommon.git
+  GIT_TAG         main
 )
 
 FetchContent_MakeAvailable(googletest GraphZeppelinCommon)
