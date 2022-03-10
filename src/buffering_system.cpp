@@ -26,42 +26,42 @@ void BufferingSystem::configure_system() {
   if (conf.is_open()) {
     while(getline(conf, line)) {
       if (line[0] == '#' || line[0] == '\n') continue;
-      if(line.substr(0, line.find('=')) == "buffer_exp") {
+      else if(line.substr(0, line.find('=')) == "buffer_exp") {
         buffer_exp  = std::stoi(line.substr(line.find('=') + 1));
         if (buffer_exp > 30 || buffer_exp < 10) {
           printf("WARNING: buffer_exp out of bounds [10,30] using default(20)\n");
           buffer_exp = 20;
         }
       }
-      if(line.substr(0, line.find('=')) == "branch") {
+      else if(line.substr(0, line.find('=')) == "branch") {
         branch = std::stoi(line.substr(line.find('=') + 1));
         if (branch > 2048 || branch < 2) {
           printf("WARNING: branch out of bounds [2,2048] using default(64)\n");
           branch = 64;
         }
       }
-      if(line.substr(0, line.find('=')) == "queue_factor") {
+      else if(line.substr(0, line.find('=')) == "queue_factor") {
         queue_f = std::stoi(line.substr(line.find('=') + 1));
         if (queue_f > 16 || queue_f < 1) {
           printf("WARNING: queue_factor out of bounds [1,16] using default(2)\n");
           queue_f = 2;
         }
       }
-      if(line.substr(0, line.find('=')) == "page_factor") {
+      else if(line.substr(0, line.find('=')) == "page_factor") {
         page_factor = std::stoi(line.substr(line.find('=') + 1));
         if (page_factor > 50 || page_factor < 1) {
           printf("WARNING: page_factor out of bounds [1,50] using default(1)\n");
           page_factor = 1;
         }
       }
-      if(line.substr(0, line.find('=')) == "num_threads") {
+      else if(line.substr(0, line.find('=')) == "num_threads") {
         n_fushers = std::stoi(line.substr(line.find('=') + 1));
         if (n_fushers > 20 || n_fushers < 1) {
           printf("WARNING: num_threads out of bounds [1,20] using default(1)\n");
           n_fushers = 1;
         }
       }
-      if(line.substr(0, line.find('=')) == "gutter_factor") {
+      else if(line.substr(0, line.find('=')) == "gutter_factor") {
         gutter_f = std::stof(line.substr(line.find('=') + 1));
         if (gutter_f < 1 && gutter_f > -1) {
           printf("WARNING: gutter_factor must be outside of range -1 < x < 1 using default(1)\n");
