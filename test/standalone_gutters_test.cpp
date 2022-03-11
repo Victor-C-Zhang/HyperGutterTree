@@ -102,7 +102,7 @@ TEST(StandAloneGutters, AsAbstract) {
 
   write_configuration(8, gutter_factor);
 
-  BufferingSystem *buf = new StandAloneGutters(nodes, 1);
+  GutteringSystem *buf = new StandAloneGutters(nodes, 1);
   shutdown = false;
   upd_processed = 0;
   std::thread qworker(querier, (StandAloneGutters *) buf, nodes);
@@ -125,7 +125,7 @@ TEST(StandAloneGutters, AsAbstract) {
 // test designed to stress test a small number of buffers
 TEST(StandAloneGutters, HitNodePairs) {
   const int nodes       = 32;
-  const int full_buffer = BufferingSystem::sketch_size(nodes) / sizeof(node_id_t);
+  const int full_buffer = GutteringSystem::sketch_size(nodes) / sizeof(node_id_t);
   const int num_updates = 20 * full_buffer;
 
   write_configuration(8, -8); // 8 is queue_factor, -8 is gutter_factor (small gutters)

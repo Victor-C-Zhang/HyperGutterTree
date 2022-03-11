@@ -8,7 +8,7 @@
 #include "types.h"
 #include "buffer_control_block.h"
 #include "work_queue.h"
-#include "buffering_system.h"
+#include "guttering_system.h"
 
 typedef void insert_ret_t;
 typedef void flush_ret_t;
@@ -19,7 +19,7 @@ struct flush_struct;
 /*
  * Structure of the GutterTree
  */
-class GutterTree : public BufferingSystem {
+class GutterTree : public GutteringSystem {
 private:
   // root directory of tree
   std::string dir;
@@ -135,6 +135,11 @@ public:
    * @return   nothing
    */
   void set_non_block(bool block);
+
+  /*
+   * Access the size of a leaf gutter through the GutteringSystem abstract class
+   */
+  int gutter_size() { return leaf_size; }
 
   /*
    * Function to convert an update_t to a char array

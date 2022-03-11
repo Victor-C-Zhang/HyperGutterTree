@@ -1,17 +1,17 @@
-#include "buffering_system.h"
+#include "guttering_system.h"
 
 #include <string>
 #include <unistd.h> //sysconf
 #include <fstream>
 
-uint32_t BufferingSystem::page_size;
-uint32_t BufferingSystem::buffer_size;
-uint32_t BufferingSystem::fanout;
-uint32_t BufferingSystem::queue_factor;
-uint32_t BufferingSystem::num_flushers;
-float BufferingSystem::gutter_factor;
+uint32_t GutteringSystem::page_size;
+uint32_t GutteringSystem::buffer_size;
+uint32_t GutteringSystem::fanout;
+uint32_t GutteringSystem::queue_factor;
+uint32_t GutteringSystem::num_flushers;
+float GutteringSystem::gutter_factor;
 
-void BufferingSystem::configure_system() {
+void GutteringSystem::configure_system() {
   // some default values
   uint32_t buffer_exp  = 20;
   uint16_t branch      = 64;

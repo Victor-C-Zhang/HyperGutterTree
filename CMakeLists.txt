@@ -61,8 +61,8 @@ FetchContent_Declare(
 FetchContent_MakeAvailable(googletest GraphZeppelinCommon)
 
 add_library(GutterTree
-  src/buffering_system.cpp
-  include/buffering_system.h
+  src/guttering_system.cpp
+  include/guttering_system.h
   src/gutter_tree.cpp
   include/gutter_tree.h
   src/buffer_control_block.cpp

@@ -1,12 +1,12 @@
 #pragma once
 #include "work_queue.h"
 #include "types.h"
-#include "buffering_system.h"
+#include "guttering_system.h"
 
 /**
  * In-memory wrapper to offer the same interface as a buffer tree.
  */
-class StandAloneGutters : public BufferingSystem {
+class StandAloneGutters : public GutteringSystem {
 private:
   uint32_t buffer_size; // size of a buffer (including metadata)
   WorkQueue *wq;
@@ -59,6 +59,11 @@ public:
    *           and false if we should turn them off.
    */
   void set_non_block(bool block);
+
+  /*
+   * Access the size of a leaf gutter through the GutteringSystem abstract class
+   */
+  int gutter_size() { return buffer_size; }
 
   static const uint32_t serial_update_size = sizeof(node_id_t);
 };

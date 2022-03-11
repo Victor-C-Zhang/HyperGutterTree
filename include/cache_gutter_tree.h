@@ -5,19 +5,19 @@
 
 #include "work_queue.h"
 #include "types.h"
-#include "buffering_system.h"
+#include "guttering_system.h"
 
 constexpr size_t M = 32768; // The size in bytes of the L1 cache
 constexpr size_t B = 64;    // The size of a cache line
 static_assert(M % B == 0);
 
 /*
- * CacheGutterTree is a version of the StandaloneGutters buffering system
- * It is designed to be highly efficient when the buffering system is entirely in memory
+ * CacheGutterTree is a version of the StandaloneGutters guttering system
+ * It is designed to be highly efficient when the guttering system is entirely in memory
  * and when the number of nodes in the graph very high by maintaining a gutter tree like
  * structure but for cache rather than disk.
  */
-class CacheGutterTree : public BufferingSystem {
+class CacheGutterTree : public GutteringSystem {
  private:
   static size_t getNumLevels(size_t numLeaves) {
     const double fractionalNumLevels = std::log(numLeaves) / std::log(M / B);
@@ -146,4 +146,9 @@ class CacheGutterTree : public BufferingSystem {
    *           and false if we should turn them off.
    */
   void set_non_block(bool block);
+
+  /*
+   * Access the size of a leaf gutter through the GutteringSystem abstract class
+   */
+  int gutter_size() { return bytes_size; }
 };
