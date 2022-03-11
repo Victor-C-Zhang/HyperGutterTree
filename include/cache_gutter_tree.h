@@ -150,5 +150,5 @@ class CacheGutterTree : public GutteringSystem {
   /*
    * Access the size of a leaf gutter through the GutteringSystem abstract class
    */
-  int gutter_size() { return bytes_size; }
+  int upds_per_gutter() { return bytes_size / sizeof(node_id_t); }
 };

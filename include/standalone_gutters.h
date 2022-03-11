@@ -63,7 +63,7 @@ public:
   /*
    * Access the size of a leaf gutter through the GutteringSystem abstract class
    */
-  int gutter_size() { return buffer_size; }
+  int upds_per_gutter() { return buffer_size / sizeof(node_id_t); }
 
   static const uint32_t serial_update_size = sizeof(node_id_t);
 };

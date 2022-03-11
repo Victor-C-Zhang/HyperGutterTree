@@ -137,9 +137,9 @@ public:
   void set_non_block(bool block);
 
   /*
-   * Access the size of a leaf gutter through the GutteringSystem abstract class
+   * Access the maximum number of updates per gutter added to the work queue
    */
-  int gutter_size() { return leaf_size; }
+  int upds_per_gutter() { return (leaf_size + page_size) / serial_update_size; }
 
   /*
    * Function to convert an update_t to a char array
