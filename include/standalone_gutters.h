@@ -8,17 +8,22 @@
  */
 class StandAloneGutters : public BufferingSystem {
 private:
+  struct Gutter
+  { 
+    std::recursive_mutex mux;
+    std::vector<node_id_t> buffer;
+  };
   uint32_t buffer_size; // size of a buffer (including metadata)
   WorkQueue *wq;
-  std::vector<std::vector<node_id_t>> buffers; // array dump of numbers for performance:
+  std::vector<Gutter> gutters; // array dump of numbers for performance:
                                                // DO NOT try to access directly!
 
   /**
    * Flushes the corresponding buffer to the queue.
-   * @param buffer      a pointer to the head of the buffer to flush.
+   * @param gutter      a pointer to the head of the gutter to flush.
    * @param num_bytes   the number of bytes to flush.
    */
-  void flush(std::vector<node_id_t> &buffer, uint32_t num_bytes);
+  void flush(Gutter &gutter, uint32_t num_bytes);
 
   /**
    * Use buffering.conf configuration file to determine parameters of the StandAloneGutters

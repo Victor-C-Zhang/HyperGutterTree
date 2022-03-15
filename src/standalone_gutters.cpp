@@ -2,7 +2,7 @@
 #include <fstream>
 #include "../include/standalone_gutters.h"
 
-StandAloneGutters::StandAloneGutters(node_id_t num_nodes, int workers) : buffers(num_nodes) {
+StandAloneGutters::StandAloneGutters(node_id_t num_nodes, int workers) : gutters(num_nodes) {
   configure(); // read buffering configuration file
 
   // size of leaf proportional to size of sketch (add 1 because we have 1 metadata slots per buffer)
@@ -12,8 +12,8 @@ StandAloneGutters::StandAloneGutters(node_id_t num_nodes, int workers) : buffers
   wq = new WorkQueue(workers * queue_factor, bytes_size);
 
   for (node_id_t i = 0; i < num_nodes; ++i) {
-    buffers[i].reserve(buffer_size);
-    buffers[i].push_back(i); // second spot identifies the node to which the buffer
+    gutters[i].buffer.reserve(buffer_size);
+    gutters[i].buffer.push_back(i); // second spot identifies the node to which the buffer
   }
 }
 
@@ -55,15 +55,18 @@ void StandAloneGutters::configure() {
     gutter_factor = 1 / (-1 * gutter_factor); // gutter factor reduces size if negative
 }
 
-void StandAloneGutters::flush(std::vector<node_id_t> &buffer, uint32_t num_bytes) {
-  wq->push(reinterpret_cast<char *>(buffer.data()), num_bytes);
+void StandAloneGutters::flush(Gutter &gutter, uint32_t num_bytes) {
+  const std::lock_guard<std::recursive_mutex> lock(gutter.mux);
+  wq->push(reinterpret_cast<char *>(gutter.buffer.data()), num_bytes);
 }
 
 insert_ret_t StandAloneGutters::insert(const update_t &upd) {
-  std::vector<node_id_t> &ptr = buffers[upd.first];
+  Gutter &gutter = gutters[upd.first];
+  std::vector<node_id_t> &ptr = gutter.buffer;
+  const std::lock_guard<std::recursive_mutex> lock(gutter.mux);
   ptr.push_back(upd.second);
   if (ptr.size() == buffer_size) { // full, so request flush
-    flush(ptr, buffer_size*sizeof(node_id_t));
+    flush(gutter, buffer_size*sizeof(node_id_t));
     ptr.clear();
     ptr.push_back(upd.first);
   }
@@ -104,10 +107,12 @@ bool StandAloneGutters::get_data(data_ret_t &data) {
 }
 
 flush_ret_t StandAloneGutters::force_flush() {
-  for (auto & buffer : buffers) {
+  for (auto & gutter : gutters) {
+    const std::lock_guard<std::recursive_mutex> lock(gutter.mux);
+    std::vector<node_id_t> &buffer = gutter.buffer;
     if (buffer.size() > 1) { // have stuff to flush
       node_id_t i = buffer[0];
-      flush(buffer, buffer.size()*sizeof(node_id_t));
+      flush(gutter, buffer.size()*sizeof(node_id_t));
       buffer.clear();
       buffer.push_back(i);
     }
