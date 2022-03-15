@@ -3,7 +3,7 @@ include(FetchContent)
 
 project(GutterTree)
 
-set(CMAKE_CXX_STANDARD 11)
+set(CMAKE_CXX_STANDARD 14)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS ON)
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${PROJECT_BINARY_DIR}/lib)
@@ -61,18 +61,21 @@ FetchContent_Declare(
 FetchContent_MakeAvailable(googletest GraphZeppelinCommon)
 
 add_library(GutterTree
-    include/buffering_system.h
-    src/gutter_tree.cpp
-    include/gutter_tree.h
-    src/buffer_control_block.cpp
-    include/buffer_control_block.h
-    src/buffer_flusher.cpp
-    include/buffer_flusher.h
-    src/standalone_gutters.cpp
-    include/standalone_gutters.h
-    src/work_queue.cpp
-    include/work_queue.h
-    include/types.h)
+  src/guttering_system.cpp
+  include/guttering_system.h
+  src/gutter_tree.cpp
+  include/gutter_tree.h
+  src/buffer_control_block.cpp
+  include/buffer_control_block.h
+  src/buffer_flusher.cpp
+  include/buffer_flusher.h
+  src/standalone_gutters.cpp
+  include/standalone_gutters.h
+  src/cache_gutter_tree.cpp
+  include/cache_gutter_tree.h
+  src/work_queue.cpp
+  include/work_queue.h
+  include/types.h)
 add_dependencies(GutterTree GraphZeppelinCommon)
 target_link_libraries(GutterTree PUBLIC gtest GraphZeppelinCommon)
 # different OSes have different ways of efficiently pre-allocating large files
@@ -92,7 +95,8 @@ if (BUILD_EXE)
   add_executable(buffering_tests
     test/runner.cpp
     test/gutter_tree_test.cpp
-    test/standalone_gutters_test.cpp)
+    test/standalone_gutters_test.cpp
+    test/cache_gutter_tree_test.cpp)
   target_link_libraries(buffering_tests PRIVATE GutterTree)
 
   add_executable(buffering_experiment

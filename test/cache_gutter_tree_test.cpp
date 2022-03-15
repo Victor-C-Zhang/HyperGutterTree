@@ -3,7 +3,7 @@
 #include <atomic>
 #include <fstream>
 #include <math.h>
-#include "../include/standalone_gutters.h"
+#include "../include/cache_gutter_tree.h"
 
 #define KB (1 << 10)
 #define MB (1 << 20)
@@ -15,10 +15,10 @@ static std::atomic<uint32_t> upd_processed;
 // queries the buffer tree and verifies that the data
 // returned makes sense
 // Should be run in a seperate thread
-static void querier(StandAloneGutters *gutters, int nodes) {
+static void querier(CacheGutterTree *cache_tree, int nodes) {
   data_ret_t data;
   while(true) {
-    bool valid = gutters->get_data(data);
+    bool valid = cache_tree->get_data(data);
     if (valid) {
       node_id_t key = data.first;
       std::vector<size_t> updates = data.second;
@@ -51,27 +51,27 @@ static void run_test(const int nodes, const int num_updates, const int gutter_fa
 
   write_configuration(8, gutter_factor); // 8 is queue_factor
 
-  StandAloneGutters *gutters = new StandAloneGutters(nodes, 1); // 1 is the number of workers
+  CacheGutterTree *cache_tree = new CacheGutterTree(nodes, 1); // 1 is the number of workers
   shutdown = false;
   upd_processed = 0;
-  std::thread qworker(querier, gutters, nodes);
+  std::thread qworker(querier, cache_tree, nodes);
 
   for (int i = 0; i < num_updates; i++) {
     update_t upd;
     upd.first = i % nodes;
     upd.second = (nodes - 1) - (i % nodes);
-    gutters->insert(upd);
+    cache_tree->insert(upd);
   }
   printf("force flush\n");
-  gutters->force_flush();
+  cache_tree->force_flush();
   shutdown = true;
-  gutters->set_non_block(true); // switch to non-blocking calls in an effort to exit
+  cache_tree->set_non_block(true); // switch to non-blocking calls in an effort to exit
   qworker.join();
   ASSERT_EQ(num_updates, upd_processed);
-  delete gutters;
+  delete cache_tree;
 }
 
-TEST(StandAloneGutters, Small) {
+TEST(CacheGutterTree, Small) {
   const int nodes = 10;
   const int num_updates = 400;
   const int gutter_factor = 1;
@@ -79,7 +79,7 @@ TEST(StandAloneGutters, Small) {
   run_test(nodes, num_updates, gutter_factor);
 }
 
-TEST(StandAloneGutters, Medium) {
+TEST(CacheGutterTree, Medium) {
   const int nodes = 100;
   const int num_updates = 360000;
   const int gutter_factor = 1;
@@ -87,7 +87,7 @@ TEST(StandAloneGutters, Medium) {
   run_test(nodes, num_updates, gutter_factor);
 }
 
-TEST(StandAloneGutters, ManyInserts) {
+TEST(CacheGutterTree, ManyInserts) {
   const int nodes = 32;
   const int num_updates = 1000000;
   const int gutter_factor = 1;
@@ -95,17 +95,17 @@ TEST(StandAloneGutters, ManyInserts) {
   run_test(nodes, num_updates, gutter_factor);
 }
 
-TEST(StandAloneGutters, AsAbstract) {
+TEST(CacheGutterTree, AsAbstract) {
   const int nodes = 10;
   const int num_updates = 400;
   const int gutter_factor = 1;
 
   write_configuration(8, gutter_factor);
 
-  GutteringSystem *buf = new StandAloneGutters(nodes, 1);
+  GutteringSystem *buf = new CacheGutterTree(nodes, 1);
   shutdown = false;
   upd_processed = 0;
-  std::thread qworker(querier, (StandAloneGutters *) buf, nodes);
+  std::thread qworker(querier, (CacheGutterTree *) buf, nodes);
 
   for (int i = 0; i < num_updates; i++) {
     update_t upd;
@@ -123,102 +123,65 @@ TEST(StandAloneGutters, AsAbstract) {
 }
 
 // test designed to stress test a small number of buffers
-TEST(StandAloneGutters, HitNodePairs) {
+TEST(CacheGutterTree, HitNodePairs) {
   const int nodes       = 32;
   const int full_buffer = GutteringSystem::sketch_size(nodes) / sizeof(node_id_t);
   const int num_updates = 20 * full_buffer;
 
-  write_configuration(8, -8); // 8 is queue_factor, -8 is gutter_factor (small gutters)
+  write_configuration(8, 8); // 8 is queue_factor, -8 is gutter_factor (small gutters)
 
-  StandAloneGutters *gutters = new StandAloneGutters(nodes, 1); // 1 is the number of workers
+  CacheGutterTree *cache_tree = new CacheGutterTree(nodes, 1); // 1 is the number of workers
   shutdown = false;
   upd_processed = 0;
-  std::thread qworker(querier, gutters, nodes);
+  std::thread qworker(querier, cache_tree, nodes);
   
   for (int n = 0; n < num_updates / full_buffer; n++) {
     for (int i = 0; i < full_buffer; i++) {
       update_t upd;
       upd.first = n;
       upd.second = (nodes - 1) - (n % nodes);
-      gutters->insert(upd);
+      cache_tree->insert(upd);
     }
   }
-  gutters->force_flush();
+  cache_tree->force_flush();
   shutdown = true;
-  gutters->set_non_block(true); // switch to non-blocking calls in an effort to exit
+  cache_tree->set_non_block(true); // switch to non-blocking calls in an effort to exit
 
   qworker.join();
   ASSERT_EQ(num_updates, upd_processed);
-  delete gutters;
+  delete cache_tree;
 }
 
 
-TEST(StandAloneGutters, ManyQueryThreads) {
+TEST(CacheGutterTree, ManyQueryThreads) {
   const int nodes       = 1024;
   const int num_updates = 5206;
 
   // here we limit the number of slots in the circular queue to 
   // create contention between the threads. (we pass 5 threads and queue factor =1 instead of 20,8)
-  write_configuration(1, -2); // 1 is queue_factor, -2 is gutter_factor
+  write_configuration(1, -8); // 1 is queue_factor, -8 is gutter_factor
 
-  StandAloneGutters *gutters = new StandAloneGutters(nodes, 5); // 5 is the number of workers
+  CacheGutterTree *cache_tree = new CacheGutterTree(nodes, 5); // 5 is the number of workers
   shutdown = false;
   upd_processed = 0;
   std::thread query_threads[20];
   for (int t = 0; t < 20; t++) {
-    query_threads[t] = std::thread(querier, gutters, nodes);
+    query_threads[t] = std::thread(querier, cache_tree, nodes);
   }
   
   for (int i = 0; i < num_updates; i++) {
     update_t upd;
     upd.first = i % nodes;
     upd.second = (nodes - 1) - (i % nodes);
-    gutters->insert(upd);
+    cache_tree->insert(upd);
   }
-  gutters->force_flush();
+  cache_tree->force_flush();
   shutdown = true;
-  gutters->set_non_block(true); // switch to non-blocking calls in an effort to exit
+  cache_tree->set_non_block(true); // switch to non-blocking calls in an effort to exit
 
   for (int t = 0; t < 20; t++) {
     query_threads[t].join();
   }
   ASSERT_EQ(num_updates, upd_processed);
-  delete gutters;
-}
-
-TEST(StandAloneGutters, FlushAndInsertAgain) {
-  const int nodes       = 1024;
-  const int num_updates = 10000;
-  const int num_flushes = 5;
-
-  write_configuration(2, 8); // 2 is queue_factor, 8 is gutter_factor
-
-  StandAloneGutters *gutters = new StandAloneGutters(nodes, 2); // 2 is the number of workers
-  shutdown = false;
-  upd_processed = 0;
-  std::thread query_threads[2];
-  for (int t = 0; t < 2; t++) {
-    query_threads[t] = std::thread(querier, gutters, nodes);
-  }
-  
-  for (int f = 0; f < num_flushes; f++) {
-    for (int i = 0; i < num_updates; i++) {
-      update_t upd;
-      upd.first = i % nodes;
-      upd.second = (nodes - 1) - (i % nodes);
-      gutters->insert(upd);
-    }
-    gutters->force_flush();
-  }
-
-  // flush again to ensure that doesn't cause problems
-  gutters->force_flush();
-  shutdown = true;
-  gutters->set_non_block(true); // switch to non-blocking calls in an effort to exit
-
-  for (int t = 0; t < 2; t++) {
-    query_threads[t].join();
-  }
-  ASSERT_EQ(num_updates * num_flushes, upd_processed);
-  delete gutters;
+  delete cache_tree;
 }

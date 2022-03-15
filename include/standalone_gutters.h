@@ -1,12 +1,12 @@
 #pragma once
 #include "work_queue.h"
 #include "types.h"
-#include "buffering_system.h"
+#include "guttering_system.h"
 
 /**
  * In-memory wrapper to offer the same interface as a buffer tree.
  */
-class StandAloneGutters : public BufferingSystem {
+class StandAloneGutters : public GutteringSystem {
 private:
   uint32_t buffer_size; // size of a buffer (including metadata)
   WorkQueue *wq;
@@ -19,18 +19,6 @@ private:
    * @param num_bytes   the number of bytes to flush.
    */
   void flush(std::vector<node_id_t> &buffer, uint32_t num_bytes);
-
-  /**
-   * Use buffering.conf configuration file to determine parameters of the StandAloneGutters
-   * Sets the following variables
-   * Queue_Factor :   The number of queue slots per worker removing data from the queue
-   * Size_Factor  :   Decrease the amount of bytes used per node by this multiplicative factor
-   */
-  void configure();
-
-  // configuration variables
-  uint32_t queue_factor; // number of elements in queue is this factor * num_workers
-  float gutter_factor;   // factor which increases/decreases the leaf gutter size
 public:
   /**
    * Constructs a new .
@@ -71,6 +59,11 @@ public:
    *           and false if we should turn them off.
    */
   void set_non_block(bool block);
+
+  /*
+   * Access the size of a leaf gutter through the GutteringSystem abstract class
+   */
+  int upds_per_gutter() { return buffer_size / sizeof(node_id_t); }
 
   static const uint32_t serial_update_size = sizeof(node_id_t);
 };
