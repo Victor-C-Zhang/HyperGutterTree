@@ -2,8 +2,6 @@
 #include <fstream>
 #include "../include/standalone_gutters.h"
 
-const unsigned first_idx = 2;
-
 StandAloneGutters::StandAloneGutters(node_id_t num_nodes, int workers) : buffers(num_nodes) {
   configure_system(); // read buffering configuration file
 
