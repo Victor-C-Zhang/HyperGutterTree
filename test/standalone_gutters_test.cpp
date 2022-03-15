@@ -111,32 +111,32 @@ TEST(StandAloneGutters, ManyInserts) {
 }
 
 TEST(StandAloneGutters, VeryManyInserts) {
-  const int nodes = 32;
-  const int num_updates = 50000000;
+  const int nodes = 100;
+  const int num_updates = 100000000;
   const int gutter_factor = 1;
 
   run_test(nodes, num_updates, gutter_factor);
 }
 
 TEST(StandAloneGutters, VeryManyInsertsTenWorkers) {
-  const int nodes = 32;
-  const int num_updates = 50000000;
+  const int nodes = 100;
+  const int num_updates = 100000000;
   const int gutter_factor = 1;
 
   run_test(nodes, num_updates, gutter_factor, 1, 10);
 }
 
 TEST(StandAloneGutters, VeryManyParallelInserts) {
-  const int nodes = 32;
-  const int num_updates = 50000000;
+  const int nodes = 100;
+  const int num_updates = 100000000;
   const int gutter_factor = 1;
 
   run_test(nodes, num_updates, gutter_factor, 10, 10);
 }
 
 TEST(StandAloneGutters, VeryManyParallelInsertsOneWorker) {
-  const int nodes = 32;
-  const int num_updates = 50000000;
+  const int nodes = 100;
+  const int num_updates = 100000000;
   const int gutter_factor = 1;
 
   run_test(nodes, num_updates, gutter_factor, 10, 1);
