@@ -45,23 +45,38 @@ void write_configuration(int queue_factor, int gutter_factor) {
 // this test only works if the depth of the tree does not exceed 1
 // and no work is claimed off of the work queue
 // to work correctly num_updates must be a multiple of nodes
-void run_test(const int nodes, const int num_updates, const int gutter_factor) {
+// and also of nthreads
+void run_test(const int nodes, const int num_updates, const int gutter_factor, const int nthreads=1, const int nworkers=1) {
   printf("Standalone Gutters => Running Test: nodes=%i num_updates=%i gutter_factor %i\n",
          nodes, num_updates, gutter_factor);
 
   write_configuration(8, gutter_factor); // 8 is queue_factor
 
-  StandAloneGutters *gutters = new StandAloneGutters(nodes, 1); // 1 is the number of workers
+  StandAloneGutters *gutters = new StandAloneGutters(nodes, nworkers); // 1 is the number of workers
   shutdown = false;
   upd_processed = 0;
   std::thread qworker(querier, gutters, nodes);
+  
+  std::vector<std::thread> threads;
+  threads.reserve(nthreads);
+  // This is the work to do per thread
+  const int work_per = num_updates / nthreads;
+  ASSERT_EQ(work_per * nthreads, num_updates);
 
-  for (int i = 0; i < num_updates; i++) {
-    update_t upd;
-    upd.first = i % nodes;
-    upd.second = (nodes - 1) - (i % nodes);
-    gutters->insert(upd);
-  }
+  auto task = [&](const int j){
+    for (int i = j * work_per; i < (j+1) * work_per; i++) {
+      update_t upd;
+      upd.first = i % nodes;
+      upd.second = (nodes - 1) - (i % nodes);
+      gutters->insert(upd);
+    }
+  };
+  //Spin up then join threads
+  for (int j = 0; j < nthreads; j++)
+    threads.emplace_back(task, j);
+  for (int j = 0; j < nthreads; j++)
+    threads[j].join();
+
   printf("force flush\n");
   gutters->force_flush();
   shutdown = true;
@@ -93,6 +108,38 @@ TEST(StandAloneGutters, ManyInserts) {
   const int gutter_factor = 1;
 
   run_test(nodes, num_updates, gutter_factor);
+}
+
+TEST(StandAloneGutters, VeryManyInserts) {
+  const int nodes = 32;
+  const int num_updates = 50000000;
+  const int gutter_factor = 1;
+
+  run_test(nodes, num_updates, gutter_factor);
+}
+
+TEST(StandAloneGutters, VeryManyInsertsTenWorkers) {
+  const int nodes = 32;
+  const int num_updates = 50000000;
+  const int gutter_factor = 1;
+
+  run_test(nodes, num_updates, gutter_factor, 1, 10);
+}
+
+TEST(StandAloneGutters, VeryManyParallelInserts) {
+  const int nodes = 32;
+  const int num_updates = 50000000;
+  const int gutter_factor = 1;
+
+  run_test(nodes, num_updates, gutter_factor, 10, 10);
+}
+
+TEST(StandAloneGutters, VeryManyParallelInsertsOneWorker) {
+  const int nodes = 32;
+  const int num_updates = 50000000;
+  const int gutter_factor = 1;
+
+  run_test(nodes, num_updates, gutter_factor, 10, 1);
 }
 
 TEST(StandAloneGutters, AsAbstract) {
