@@ -36,15 +36,16 @@ void CacheGutterTree::CacheGutterTreeNode::flush(bool force) {
 
 bool CacheGutterTree::get_data(data_ret_t &data) {
   // make a request to the circular buffer for data
-  std::pair<int, queue_elm> queue_data;
+  std::pair<int, queue_ret_t> queue_data;
   bool got_data = wq.peek(queue_data);
 
   if (!got_data) return false;  // we got no data so return not valid
-  int i = queue_data.first;
-  queue_elm elm = queue_data.second;
-  auto *serial_data = reinterpret_cast<node_id_t *>(elm.data);
-  uint32_t len = elm.size;
+  
+  int i                  = queue_data.first;
+  uint32_t len           = queue_data.second.first;
+  node_id_t *serial_data = reinterpret_cast<node_id_t *>(queue_data.second.second);
   assert(len % sizeof(node_id_t) == 0);
+
 
   if (len == 0) return false;  // we got no data so return not valid
   // assume the first key is correct so extract it

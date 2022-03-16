@@ -396,16 +396,15 @@ bool GutterTree::get_data(data_ret_t &data) {
   File_Pointer idx = 0;
 
   // make a request to the circular buffer for data
-  std::pair<int, queue_elm> queue_data;
+  std::pair<int, queue_ret_t> queue_data;
   bool got_data = wq->peek(queue_data);
 
   if (!got_data)
     return false; // we got no data so return not valid
 
-  int i         = queue_data.first;
-  queue_elm elm = queue_data.second;
-  char *serial_data = elm.data;
-  uint32_t len      = elm.size;
+  int i             = queue_data.first;
+  uint32_t len      = queue_data.second.first;
+  char *serial_data = queue_data.second.second;
 
   if (len == 0) {
     wq->pop(i);

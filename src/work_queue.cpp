@@ -52,7 +52,7 @@ void WorkQueue::push(char *elm, int size) {
   }
 }
 
-bool WorkQueue::peek(std::pair<int, queue_elm> &ret) {
+bool WorkQueue::peek(std::pair<int, queue_ret_t> &ret) {
   do {
     std::unique_lock<std::mutex> lk(rw_lock);
     wq_empty.wait_for(lk, std::chrono::milliseconds(500), [this]{return (!empty() || no_block);});
@@ -63,7 +63,7 @@ bool WorkQueue::peek(std::pair<int, queue_elm> &ret) {
       lk.unlock();
 
       ret.first = temp;
-      ret.second = queue_array[temp];
+      ret.second = {queue_array[temp].size, queue_array[temp].data};
       return true;
     }
     lk.unlock();
@@ -72,10 +72,8 @@ bool WorkQueue::peek(std::pair<int, queue_elm> &ret) {
 }
 
 void WorkQueue::pop(int i) {
-  rw_lock.lock();
   queue_array[i].dirty   = false; // this data has been processed and this slot may now be overwritten
   queue_array[i].touched = false; // may read this slot
-  rw_lock.unlock();
   wq_full.notify_one();
 }
 

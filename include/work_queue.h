@@ -5,11 +5,13 @@
 #include <atomic>
 
 struct queue_elm {
-  bool dirty;      // is this queue element yet to be processed by sketching (if so do not overwrite)
-  bool touched;    // have we peeked at this item (if so do not peek it again)
-  uint32_t size;   // the size of this data element (in bytes)
-  char *data;      // a pointer to the data
+  std::atomic<bool> dirty;   // is the queue element unprocessed (if so do not overwrite)
+  std::atomic<bool> touched; // have we peeked at this item (if so do not peek it again)
+  uint32_t size;             // the size of this data element (in bytes)
+  char *data;                // a pointer to the data
 };
+
+typedef std::pair<uint32_t, char *> queue_ret_t;
 
 /*
  * The Work Queue: A circular queue of data elements.
@@ -35,7 +37,7 @@ public:
    * @param   ret where the data from the work queue should be placed
    * @return  true if we were able to get good data, false otherwise
    */
-  bool peek(std::pair<int, queue_elm> &ret);
+  bool peek(std::pair<int, queue_ret_t> &ret);
   
   /* 
    * Mark a queue element as ready to be overwritten.
