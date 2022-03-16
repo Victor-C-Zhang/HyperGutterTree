@@ -10,7 +10,7 @@ class StandAloneGutters : public BufferingSystem {
 private:
   struct Gutter
   { 
-    std::recursive_mutex mux;
+    std::mutex mux;
     std::vector<node_id_t> buffer;
   };
   uint32_t buffer_size; // size of a buffer (including metadata)

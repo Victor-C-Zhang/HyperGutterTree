@@ -56,14 +56,14 @@ void StandAloneGutters::configure() {
 }
 
 void StandAloneGutters::flush(Gutter &gutter, uint32_t num_bytes) {
-  const std::lock_guard<std::recursive_mutex> lock(gutter.mux);
+  //const std::lock_guard<std::recursive_mutex> lock(gutter.mux);
   wq->push(reinterpret_cast<char *>(gutter.buffer.data()), num_bytes);
 }
 
 insert_ret_t StandAloneGutters::insert(const update_t &upd) {
   Gutter &gutter = gutters[upd.first];
   std::vector<node_id_t> &ptr = gutter.buffer;
-  const std::lock_guard<std::recursive_mutex> lock(gutter.mux);
+  const std::lock_guard<std::mutex> lock(gutter.mux);
   ptr.push_back(upd.second);
   if (ptr.size() == buffer_size) { // full, so request flush
     flush(gutter, buffer_size*sizeof(node_id_t));
@@ -108,7 +108,7 @@ bool StandAloneGutters::get_data(data_ret_t &data) {
 
 flush_ret_t StandAloneGutters::force_flush() {
   for (auto & gutter : gutters) {
-    const std::lock_guard<std::recursive_mutex> lock(gutter.mux);
+    const std::lock_guard<std::mutex> lock(gutter.mux);
     std::vector<node_id_t> &buffer = gutter.buffer;
     if (buffer.size() > 1) { // have stuff to flush
       node_id_t i = buffer[0];
