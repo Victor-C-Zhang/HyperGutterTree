@@ -430,6 +430,7 @@ bool GutterTree::get_data(data_ret_t &data) {
       // error to handle some weird unlikely gutter_tree shenanigans
       printf("source node %u and key %u do not match in get_data()\n", upd.first, key);
       printf("idx = %lu  len = %u\n", idx, len);
+      wq->print();
       throw KeyIncorrectError();
     }
 

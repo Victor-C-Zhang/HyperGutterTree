@@ -36,13 +36,13 @@ void WorkQueue::push(char *elm, int size) {
   }
 
   while(true) {
-    std::unique_lock<std::mutex> lk(rw_lock);
+    std::unique_lock<std::mutex> lk(write_lock);
     // printf("WQ: push: wait on not-full. full() = %s\n", (full())? "true" : "false");
     wq_full.wait_for(lk, std::chrono::milliseconds(500), [this]{return !full();});
     if(!full()) {
       memcpy(queue_array[head].data, elm, size);
-      queue_array[head].dirty = true;
       queue_array[head].size = size;
+      queue_array[head].dirty = true;
       head = incr(head);
       lk.unlock();
       wq_empty.notify_one();
@@ -54,7 +54,7 @@ void WorkQueue::push(char *elm, int size) {
 
 bool WorkQueue::peek(std::pair<int, queue_ret_t> &ret) {
   do {
-    std::unique_lock<std::mutex> lk(rw_lock);
+    std::unique_lock<std::mutex> lk(read_lock);
     wq_empty.wait_for(lk, std::chrono::milliseconds(500), [this]{return (!empty() || no_block);});
     if(!empty()) {
       int temp = tail;
@@ -79,5 +79,5 @@ void WorkQueue::pop(int i) {
 
 void WorkQueue::print() {
   printf("WQ: head=%i, tail=%i, is_full=%s, is_empty=%s\n", 
-    head, tail, full()? "true" : "false", empty()? "true" : "false");
+    head.load(), tail.load(), full()? "true" : "false", empty()? "true" : "false");
 }

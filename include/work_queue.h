@@ -5,10 +5,10 @@
 #include <atomic>
 
 struct queue_elm {
-  std::atomic<bool> dirty;   // is the queue element unprocessed (if so do not overwrite)
-  std::atomic<bool> touched; // have we peeked at this item (if so do not peek it again)
-  uint32_t size;             // the size of this data element (in bytes)
-  char *data;                // a pointer to the data
+  std::atomic<bool> dirty;    // is the queue element unprocessed (if so do not overwrite)
+  std::atomic<bool> touched;  // have we peeked at this item (if so do not peek it again)
+  std::atomic<uint32_t> size; // the size of this data element (in bytes)
+  char *data;                 // a pointer to the data
 };
 
 typedef std::pair<uint32_t, char *> queue_ret_t;
@@ -48,7 +48,8 @@ public:
 
   std::condition_variable wq_full;
   std::condition_variable wq_empty;
-  std::mutex rw_lock;
+  std::mutex read_lock;
+  std::mutex write_lock;
 
   // should WorkQueue peeks wait until they can succeed(false)
   // or return false on failure (true)
@@ -68,8 +69,8 @@ private:
   int32_t len;      // maximum number of data elements to be stored in the queue
   int32_t elm_size; // size of an individual element in bytes
 
-  int head;     // where to push (starts at 0, write pointer)
-  int tail;     // where to peek (starts at 0, read pointer)
+  std::atomic<int> head;     // where to push (starts at 0, write pointer)
+  std::atomic<int> tail;     // where to peek (starts at 0, read pointer)
   
   queue_elm *queue_array; // array queue_elm metadata
   char *data_array;       // the actual data
