@@ -8,6 +8,7 @@
 #include <fcntl.h>  //posix_fallocate
 #include <errno.h>
 #include <fstream>
+#include <iostream>
 
 /*
  * Constructor
@@ -522,5 +523,6 @@ flush_ret_t GutterTree::force_flush() {
 }
 
 void GutterTree::set_non_block(bool block) {
+  std::cout << "GT: setting blocking calls in work queue to " << (block ? "true" : "false") << std::endl;
   wq->no_block = block; // should work queue peek block on empty queue
 }

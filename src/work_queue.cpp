@@ -3,6 +3,8 @@
 
 #include <string.h>
 #include <chrono>
+#include <thread>
+#include <iostream>
 
 WorkQueue::WorkQueue(int num_elements, int size_of_elm): 
   len(num_elements), elm_size(size_of_elm) {
@@ -36,22 +38,23 @@ void WorkQueue::push(char *elm, int size) {
   }
 
   // Implement busy waiting until there is a slot to place the update in and we have the write lock
-  do {
-    int t = 1;
-    while(full()) {
-      std::this_thread::sleep_for(std::chrono::milliseconds(t));
-      t = t < max_sleep ? t << 2 : t; // double time to sleep up to a maximum
+  while (true) {
+    do {
+      while(full()) {}
+    } while(!write_lock.try_lock()); // could potentially switch to using CAS on head for lock-less
+
+    if (!full()) {
+      //printf("WQ: PUSH: have lock and pushing\n");
+      // perform the insertion
+      memcpy(queue_array[head].data, elm, size);
+      queue_array[head].size = size;
+      queue_array[head].dirty = true;
+      head = incr(head);
+      write_lock.unlock();
+      break;
     }
-  } while(!write_lock.try_lock()); // could potentially switch to using CAS on head for lock-less
-
-  // perform the insertion
-  int temp = head;
-  head = incr(head);
-  write_lock.unlock();
-
-  memcpy(queue_array[temp].data, elm, size);
-  queue_array[temp].size = size;
-  queue_array[head].dirty = true;
+    write_lock.unlock(); // failed to write, yield lock
+  }
 }
 
 bool WorkQueue::peek(std::pair<int, queue_ret_t> &ret) {
@@ -59,28 +62,31 @@ bool WorkQueue::peek(std::pair<int, queue_ret_t> &ret) {
   // if many threads attempt to get data only one will exit the loop with the lock at a time
   // if there is data to get, then the threads will spin-lock if there is not
   // data to get then they will sleep in increments that double
-  do {
-    int t = 1;
-    while (empty() && !no_block) {
-      std::this_thread::sleep_for(std::chrono::milliseconds(t));
-      t = t < max_sleep ? t << 2 : t; // double time to sleep up to a maximum
+  while (true) {
+    do {
+      while (empty() && !no_block) {}
+    } while (!read_lock.try_lock()); // could potentially switch to using CAS on tail for lock-less
+    
+    // check if the guttering system is empty (return false if so)
+    if (no_block && empty()) {
+      read_lock.unlock();
+      return false;
     }
-  } while (!read_lock.try_lock()); // could potentially switch to using CAS on tail for lock-less
-  
-  // check if the guttering system is empty (return false if so)
-  if (no_block && empty()) {
-    return false; 
+
+    // printf("WQ: PEEK, have lock and reading\n");
+    if (!empty()) {
+      // actually read the data
+      int temp = tail.load();
+      queue_array[tail].touched = true;
+      tail = incr(tail);
+      read_lock.unlock();
+
+      ret.first = temp;
+      ret.second = {queue_array[temp].size, queue_array[temp].data};
+      return true;
+    }
+    read_lock.unlock(); // failed to read, yield lock
   }
-
-  // actually read the data
-  int temp = tail;
-  queue_array[tail].touched = true;
-  tail = incr(tail);
-  read_lock.unlock();
-
-  ret.first = temp;
-  ret.second = {queue_array[temp].size, queue_array[temp].data};
-  return true;
 }
 
 void WorkQueue::pop(int i) {

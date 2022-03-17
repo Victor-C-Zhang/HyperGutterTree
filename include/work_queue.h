@@ -1,6 +1,5 @@
 #pragma once
 #include <condition_variable>
-#include <barrier>
 #include <mutex>
 #include <utility>
 #include <atomic>

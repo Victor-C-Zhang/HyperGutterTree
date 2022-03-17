@@ -68,6 +68,7 @@ static void run_test(const uint32_t nodes, const uint32_t num_updates, const int
   }
   printf("force flush\n");
   gt->force_flush();
+  printf("force flush DONE\n");
   shutdown = true;
   gt->set_non_block(true); // switch to non-blocking calls in an effort to exit
   qworker.join();
