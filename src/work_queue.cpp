@@ -40,7 +40,11 @@ void WorkQueue::push(char *elm, int size) {
   // Implement busy waiting until there is a slot to place the update in and we have the write lock
   while (true) {
     do {
-      while(full()) {}
+      size_t i = 0; // how many times have we waited on full
+      while(full()) {
+        if(i > 1000000) std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        else ++i;
+      }
     } while(!write_lock.try_lock()); // could potentially switch to using CAS on head for lock-less
 
     if (!full()) {
@@ -64,7 +68,11 @@ bool WorkQueue::peek(std::pair<int, queue_ret_t> &ret) {
   // data to get then they will sleep in increments that double
   while (true) {
     do {
-      while (empty() && !no_block) {}
+      size_t i = 0; // how many times have we waited on full
+      while (empty() && !no_block) { 
+        if(i > 1000000) std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        else ++i;
+      }
     } while (!read_lock.try_lock()); // could potentially switch to using CAS on tail for lock-less
     
     // check if the guttering system is empty (return false if so)
