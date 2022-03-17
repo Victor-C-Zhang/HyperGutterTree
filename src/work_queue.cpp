@@ -35,46 +35,57 @@ void WorkQueue::push(char *elm, int size) {
     throw WriteTooBig();
   }
 
-  while(true) {
-    std::unique_lock<std::mutex> lk(write_lock);
-    // printf("WQ: push: wait on not-full. full() = %s\n", (full())? "true" : "false");
-    wq_full.wait_for(lk, std::chrono::milliseconds(500), [this]{return !full();});
-    if(!full()) {
-      memcpy(queue_array[head].data, elm, size);
-      queue_array[head].size = size;
-      queue_array[head].dirty = true;
-      head = incr(head);
-      lk.unlock();
-      wq_empty.notify_one();
-      break;
+  // Implement busy waiting until there is a slot to place the update in and we have the write lock
+  do {
+    int t = 1;
+    while(full()) {
+      std::this_thread::sleep_for(std::chrono::milliseconds(t));
+      t = t < max_sleep ? t << 2 : t; // double time to sleep up to a maximum
     }
-    lk.unlock();
-  }
+  } while(!write_lock.try_lock()); // could potentially switch to using CAS on head for lock-less
+
+  // perform the insertion
+  int temp = head;
+  head = incr(head);
+  write_lock.unlock();
+
+  memcpy(queue_array[temp].data, elm, size);
+  queue_array[temp].size = size;
+  queue_array[head].dirty = true;
 }
 
 bool WorkQueue::peek(std::pair<int, queue_ret_t> &ret) {
+  // Ensure that there is data to read and that we have the lock
+  // if many threads attempt to get data only one will exit the loop with the lock at a time
+  // if there is data to get, then the threads will spin-lock if there is not
+  // data to get then they will sleep in increments that double
   do {
-    std::unique_lock<std::mutex> lk(read_lock);
-    wq_empty.wait_for(lk, std::chrono::milliseconds(500), [this]{return (!empty() || no_block);});
-    if(!empty()) {
-      int temp = tail;
-      queue_array[tail].touched = true;
-      tail = incr(tail);
-      lk.unlock();
-
-      ret.first = temp;
-      ret.second = {queue_array[temp].size, queue_array[temp].data};
-      return true;
+    int t = 1;
+    while (empty() && !no_block) {
+      std::this_thread::sleep_for(std::chrono::milliseconds(t));
+      t = t < max_sleep ? t << 2 : t; // double time to sleep up to a maximum
     }
-    lk.unlock();
-  }while(!no_block);
-  return false;
+  } while (!read_lock.try_lock()); // could potentially switch to using CAS on tail for lock-less
+  
+  // check if the guttering system is empty (return false if so)
+  if (no_block && empty()) {
+    return false; 
+  }
+
+  // actually read the data
+  int temp = tail;
+  queue_array[tail].touched = true;
+  tail = incr(tail);
+  read_lock.unlock();
+
+  ret.first = temp;
+  ret.second = {queue_array[temp].size, queue_array[temp].data};
+  return true;
 }
 
 void WorkQueue::pop(int i) {
   queue_array[i].dirty   = false; // this data has been processed and this slot may now be overwritten
   queue_array[i].touched = false; // may read this slot
-  wq_full.notify_one();
 }
 
 void WorkQueue::print() {

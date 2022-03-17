@@ -1,5 +1,6 @@
 #pragma once
 #include <condition_variable>
+#include <barrier>
 #include <mutex>
 #include <utility>
 #include <atomic>
@@ -46,8 +47,6 @@ public:
    */
   void pop(int i);
 
-  std::condition_variable wq_full;
-  std::condition_variable wq_empty;
   std::mutex read_lock;
   std::mutex write_lock;
 
@@ -77,6 +76,8 @@ private:
 
   // increment the head or tail pointer
   inline int incr(int p) {return (p + 1) % len;}
+
+  static constexpr int max_sleep = 256; // sleep for a maximum of 256 milliseconds
 };
 
 class WriteTooBig : public std::exception {
