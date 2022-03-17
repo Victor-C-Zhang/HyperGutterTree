@@ -15,7 +15,7 @@ void GutteringSystem::configure_system() {
   // some default values
   uint32_t buffer_exp  = 20;
   uint16_t branch      = 64;
-  int queue_f          = 2;
+  int queue_f          = 8;
   int page_factor      = 1;
   int n_fushers        = 1;
   float gutter_f       = 1;
@@ -42,8 +42,8 @@ void GutteringSystem::configure_system() {
       }
       else if(line.substr(0, line.find('=')) == "queue_factor") {
         queue_f = std::stoi(line.substr(line.find('=') + 1));
-        if (queue_f > 16 || queue_f < 1) {
-          printf("WARNING: queue_factor out of bounds [1,16] using default(2)\n");
+        if (queue_f > 1024 || queue_f < 1) {
+          printf("WARNING: queue_factor out of bounds [1,1024] using default(8)\n");
           queue_f = 2;
         }
       }
