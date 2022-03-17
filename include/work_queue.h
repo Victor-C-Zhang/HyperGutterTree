@@ -30,7 +30,7 @@ public:
    * @param   elm the data to be placed into the queue
    * @param   size the number of bytes in elm
    */
-  void push(char *elm, int size);              
+  void push(char *elm, int size);
   
   /* 
    * Get data from the queue for processing
