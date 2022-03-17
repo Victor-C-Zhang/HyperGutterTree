@@ -44,6 +44,14 @@ public:
    */
   bool get_data(data_ret_t& data);
 
+  /*
+   * Ask for batch_size amount of data.
+   * @param batched_data   where to store the data
+   * @param batch_size     the amount of gutters to give
+   * @return               true if got valid data, false if unable to get data.
+   */
+  bool get_data_batched(std::vector<data_ret_t> &batched_data, int batch_size);
+
   /**
    * Flushes all pending buffers.
    * @return nothing.

@@ -3,6 +3,7 @@
 #include <mutex>
 #include <utility>
 #include <atomic>
+#include <vector>
 
 struct queue_elm {
   std::atomic<bool> dirty;    // is the queue element unprocessed (if so do not overwrite)
@@ -38,6 +39,12 @@ public:
    * @return  true if we were able to get good data, false otherwise
    */
   bool peek(std::pair<int, queue_ret_t> &ret);
+
+  /*
+   * Wait until the work queue has enough items in it to satisfy the request and then
+   * return batch_size number of work units
+   */
+  bool peek_batch(std::vector<std::pair<int, queue_ret_t>> &ret, int batch_size);
   
   /* 
    * Mark a queue element as ready to be overwritten.
@@ -62,9 +69,10 @@ public:
   void print();
 
   // functions for checking if the queue is empty or full
-  inline bool full()     {return queue_array[head].dirty;} // if the next data item is dirty then full
+  inline bool full()  {return queue_array[head].dirty;} // if the next data item is dirty then full
   // if place to read from is clean and has not been peeked already then queue is empty
-  inline bool empty()    {return !queue_array[tail].dirty || queue_array[tail].touched;}
+  inline bool empty() {return !queue_array[tail].dirty || queue_array[tail].touched;}
+  inline int size()   {return (head >= tail)? head - tail : len - tail + head;}
 private:
   int32_t len;      // maximum number of data elements to be stored in the queue
   int32_t elm_size; // size of an individual element in bytes

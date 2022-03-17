@@ -3,6 +3,7 @@
 
 #include <string.h>
 #include <chrono>
+#include <cassert>
 
 WorkQueue::WorkQueue(int num_elements, int size_of_elm): 
   len(num_elements), elm_size(size_of_elm) {
@@ -38,7 +39,7 @@ void WorkQueue::push(char *elm, int size) {
   while(true) {
     std::unique_lock<std::mutex> lk(write_lock);
     // printf("WQ: push: wait on not-full. full() = %s\n", (full())? "true" : "false");
-    wq_full.wait(lk, [this]{return !full();});
+    wq_full.wait_for(lk, std::chrono::milliseconds(500), [this]{return !full();});
     if(!full()) {
       memcpy(queue_array[head].data, elm, size);
       queue_array[head].size = size;
@@ -55,7 +56,7 @@ void WorkQueue::push(char *elm, int size) {
 bool WorkQueue::peek(std::pair<int, queue_ret_t> &ret) {
   do {
     std::unique_lock<std::mutex> lk(read_lock);
-    wq_empty.wait(lk, [this]{return (!empty() || no_block);});
+    wq_empty.wait_for(lk, std::chrono::milliseconds(500), [this]{return (!empty() || no_block);});
     if(!empty()) {
       int temp = tail;
       queue_array[tail].touched = true;
@@ -71,11 +72,32 @@ bool WorkQueue::peek(std::pair<int, queue_ret_t> &ret) {
   return false;
 }
 
+bool WorkQueue::peek_batch(std::vector<std::pair<int, queue_ret_t>> &ret, int batch_size) {
+  // some asserts for sanity
+  assert(ret.capacity() >= batch_size);
+  assert(ret.size() == 0);
+  assert(batch_size >= len);
+
+  std::unique_lock<std::mutex> lk(read_lock);
+  do {
+    wq_empty.wait_for(lk, std::chrono::milliseconds(500), [this, batch_size]{return (size() >= batch_size || no_block);});
+    // give batch_size queue elements to this thread
+    int i = 0;
+    while (!empty() && i < batch_size) {
+      queue_array[tail].touched = true;
+      ret[i] = {tail, {queue_array[tail].size, queue_array[tail].data}};
+      tail = incr(tail);
+      ++i;
+    }
+    lk.unlock();
+  } while(!no_block);
+  if (ret.size() > 0) return true;
+  return false;
+}
+
 void WorkQueue::pop(int i) {
-  write_lock.lock();
   queue_array[i].dirty   = false; // this data has been processed and this slot may now be overwritten
   queue_array[i].touched = false; // may read this slot
-  write_lock.unlock();
   wq_full.notify_one();
 }
 

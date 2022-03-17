@@ -5,9 +5,12 @@
 class GutteringSystem {
 public:
   virtual insert_ret_t insert(const update_t &upd) = 0; // insert an element to the buffering system
-  virtual bool get_data(data_ret_t& data) = 0;          // get data out of the buffering system
   virtual flush_ret_t force_flush() = 0;                // force all data out of buffers
   virtual void set_non_block(bool block) = 0;           // set non-blocking calls in the work queue
+
+  // get data out of the buffering system either one gutter at a time or in a batched fashion
+  virtual bool get_data(data_ret_t& data) = 0;
+  virtual bool get_data_batched(std::vector<data_ret_t> &batched_data, int batch_size) = 0;
 
   virtual ~GutteringSystem() {};
 
