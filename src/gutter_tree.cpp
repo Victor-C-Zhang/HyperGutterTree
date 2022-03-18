@@ -395,7 +395,7 @@ flush_ret_t inline GutterTree::flush_leaf_node(flush_struct &flush_from, BufferC
 bool GutterTree::get_data(data_ret_t &data) {
   File_Pointer idx = 0;
 
-  // make a request to the circular buffer for data
+  // make a request to the work_queue for data
   std::pair<int, queue_ret_t> queue_data;
   bool got_data = wq->peek(queue_data);
 
@@ -440,6 +440,62 @@ bool GutterTree::get_data(data_ret_t &data) {
   }
 
   wq->pop(i); // mark the wq entry as clean
+  return true;
+}
+
+// ask the gutter_tree for a batch of data
+// this function may sleep until data is available
+bool GutterTree::get_data_batched(std::vector<data_ret_t> &batched_data, int batch_size) {
+
+  // make a request to the work queue for data
+  std::vector<std::pair<int, queue_ret_t>> queue_data_vec;
+  bool got_data = wq->peek_batch(queue_data_vec, batch_size);
+
+  if (!got_data)
+    return false; // we got no data so return not valid
+
+  batched_data.clear(); // remove any old data from the vector
+  for (auto &queue_data : queue_data_vec) {
+    File_Pointer idx  = 0;
+    int i             = queue_data.first;
+    uint32_t len      = queue_data.second.first;
+    char *serial_data = queue_data.second.second;
+
+    if (len == 0) {
+      wq->pop(i);
+      continue;
+    }
+
+    uint32_t vec_len  = len / serial_update_size;
+    data_ret_t data;
+    data.second.reserve(vec_len); // reserve space for our updates
+
+    // assume the first key is correct so extract it
+    node_id_t key = load_key(serial_data);
+    data.first = key;
+
+    while(idx < (uint64_t) len) {
+      update_t upd = deserialize_update(serial_data + idx);
+      // printf("got update: %lu %lu\n", upd.first, upd.second);
+      if (upd.first == 0 && upd.second == 0) {
+        break; // got a null entry so done
+      }
+
+      if (upd.first != key) {
+        // error to handle some weird unlikely gutter_tree shenanigans
+        printf("source node %u and key %u do not match in get_data()\n", upd.first, key);
+        printf("idx = %lu  len = %u\n", idx, len);
+        wq->print();
+        throw KeyIncorrectError();
+      }
+
+      // printf("query to node %lu got edge to node %lu\n", key, upd.second);
+      data.second.push_back(upd.second);
+      idx += serial_update_size;
+    }
+    batched_data.push_back(data);
+    wq->pop(i); // mark the wq entry as clean
+  }
   return true;
 }
 

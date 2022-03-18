@@ -68,6 +68,47 @@ bool StandAloneGutters::get_data(data_ret_t &data) {
   return true;
 }
 
+// ask the gutters for a batch of data
+// this function may sleep until data is available
+bool StandAloneGutters::get_data_batched(std::vector<data_ret_t> &batched_data, int batch_size) {
+  // make a request to the work queue for data
+  std::vector<std::pair<int, queue_ret_t>> queue_data_vec;
+  bool got_data = wq->peek_batch(queue_data_vec, batch_size);
+
+  if (!got_data)
+    return false; // we got no data so return not valid
+
+  batched_data.clear(); // remove any old data from the vector
+  for (auto &queue_data : queue_data_vec) {
+    int i                  = queue_data.first;
+    uint32_t len           = queue_data.second.first;
+    node_id_t *serial_data = reinterpret_cast<node_id_t *>(queue_data.second.second);
+    assert(len % sizeof(node_id_t) == 0);
+
+    if (len == 0) {
+      wq->pop(i);
+      continue;
+    }
+
+    data_ret_t data;
+
+    // assume the first key is correct so extract it
+    node_id_t key = serial_data[0];
+    data.first = key;
+
+    uint32_t vec_len  = len / sizeof(node_id_t);
+    data.second.reserve(vec_len); // reserve space for our updates
+
+    for (uint32_t j = 1; j < vec_len; ++j) {
+      data.second.push_back(serial_data[j]);
+    }
+
+    batched_data.push_back(data);
+    wq->pop(i); // mark the wq entry as clean
+  }
+  return true;
+}
+
 flush_ret_t StandAloneGutters::force_flush() {
   for (auto & buffer : buffers) {
     if (buffer.size() > 1) { // have stuff to flush

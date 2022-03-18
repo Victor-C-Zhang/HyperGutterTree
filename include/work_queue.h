@@ -72,16 +72,16 @@ public:
   inline bool full()  {return queue_array[head].dirty;} // if the next data item is dirty then full
   // if place to read from is clean and has not been peeked already then queue is empty
   inline bool empty() {return !queue_array[tail].dirty || queue_array[tail].touched;}
-  inline int size()   {return (head >= tail)? head - tail : len - tail + head;}
+  inline int get_size()   {return q_size.load();}
 private:
   int32_t len;      // maximum number of data elements to be stored in the queue
   int32_t elm_size; // size of an individual element in bytes
 
-  std::atomic<int> head;     // where to push (starts at 0, write pointer)
-  std::atomic<int> tail;     // where to peek (starts at 0, read pointer)
-  
-  queue_elm *queue_array; // array queue_elm metadata
-  char *data_array;       // the actual data
+  std::atomic<int> head;    // where to push (starts at 0, write pointer)
+  std::atomic<int> tail;    // where to peek (starts at 0, read pointer)
+  std::atomic<int> q_size;  // the number of elements currently in queue
+  queue_elm *queue_array;   // array queue_elm metadata
+  char *data_array;         // the actual data
 
   // increment the head or tail pointer
   inline int incr(int p) {return (p + 1) % len;}

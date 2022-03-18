@@ -34,6 +34,27 @@ static void querier(StandAloneGutters *gutters, int nodes) {
   }
 }
 
+static void batch_querier(StandAloneGutters *gutters, int nodes, int batch_size) {
+  std::vector<data_ret_t> data_vec;
+  while(true) {
+    bool valid = gutters->get_data_batched(data_vec, batch_size);
+    if (valid) {
+      for (auto &data : data_vec) {
+        node_id_t key = data.first;
+        std::vector<size_t> updates = data.second;
+        // verify that the updates are all between the correct nodes
+        for (auto upd : updates) {
+          // printf("edge to %d\n", upd.first);
+          ASSERT_EQ(nodes - (key + 1), upd) << "key " << key;
+          upd_processed += 1;
+        }
+      }
+    }
+    else if(shutdown)
+      return;
+  }
+}
+
 static void write_configuration(int queue_factor, int gutter_factor) {
   std::ofstream conf("./buffering.conf");
   conf << "queue_factor=" << queue_factor << std::endl;
@@ -220,5 +241,39 @@ TEST(StandAloneGutters, FlushAndInsertAgain) {
     query_threads[t].join();
   }
   ASSERT_EQ(num_updates * num_flushes, upd_processed);
+  delete gutters;
+}
+
+TEST(StandAloneGutters, GetDataBatchedTest) {
+  const int nodes = 2048;
+  const int num_updates = 100000;
+  const int data_batch_size = 8;
+
+  write_configuration(20, 1);
+
+  StandAloneGutters *gutters = new StandAloneGutters(nodes, 3);
+  shutdown = false;
+  upd_processed = 0;
+  std::thread query_threads[3];
+  for (int t = 0; t < 3; t++) {
+    query_threads[t] = std::thread(batch_querier, gutters, nodes, data_batch_size);
+  }
+  
+  for (int i = 0; i < num_updates; i++) {
+    update_t upd;
+    upd.first = i % nodes;
+    upd.second = (nodes - 1) - (i % nodes);
+    gutters->insert(upd);
+  }
+
+  // flush the gutters
+  gutters->force_flush();
+  shutdown = true;
+  gutters->set_non_block(true); // switch to non-blocking calls in an effort to exit
+
+  for (int t = 0; t < 3; t++) {
+    query_threads[t].join();
+  }
+  ASSERT_EQ(num_updates, upd_processed);
   delete gutters;
 }
