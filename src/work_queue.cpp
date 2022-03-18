@@ -17,7 +17,6 @@ WorkQueue::WorkQueue(int num_elements, int size_of_elm):
   for (int i = 0; i < len; i++) {
     queue_array[i].data    = data_array + (elm_size * i);
     queue_array[i].dirty   = false;
-    queue_array[i].touched = false;
     queue_array[i].size    = 0;
   }
   q_size = 0;
@@ -61,7 +60,6 @@ bool WorkQueue::peek(std::pair<int, queue_ret_t> &ret) {
     wq_empty.wait_for(lk, std::chrono::milliseconds(500), [this]{return (!empty() || no_block);});
     if(!empty()) {
       int temp = tail;
-      queue_array[tail].touched = true;
       tail = incr(tail);
       lk.unlock();
 
@@ -87,7 +85,6 @@ bool WorkQueue::peek_batch(std::vector<std::pair<int, queue_ret_t>> &ret, int ba
         [this, batch_size]{return (get_size() >= batch_size || no_block);});
     // give batch_size queue elements to this thread
     while (!empty() && i < batch_size) {
-      queue_array[tail].touched = true;
       ret.push_back({tail, {queue_array[tail].size, queue_array[tail].data}});
       tail = incr(tail);
       ++i;
@@ -101,8 +98,7 @@ bool WorkQueue::peek_batch(std::vector<std::pair<int, queue_ret_t>> &ret, int ba
 }
 
 void WorkQueue::pop(int i) {
-  queue_array[i].dirty   = false; // this data has been processed and this slot may now be overwritten
-  queue_array[i].touched = false; // may read this slot
+  queue_array[i].dirty = false; // this data has been processed and this slot may now be overwritten
   wq_full.notify_one();
 }
 

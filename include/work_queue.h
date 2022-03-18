@@ -5,25 +5,22 @@
 #include <atomic>
 #include <vector>
 
-struct queue_elm {
-  std::atomic<bool> dirty;    // is the queue element unprocessed (if so do not overwrite)
-  std::atomic<bool> touched;  // have we peeked at this item (if so do not peek it again)
-  std::atomic<uint32_t> size; // the size of this data element (in bytes)
-  char *data;                 // a pointer to the data
-};
+struct WQLinkedList {
+  // LL next pointer
+  WQLinkedList *next;
 
-typedef std::pair<uint32_t, char *> queue_ret_t;
-
-/*
- * The Work Queue: A circular queue of data elements.
- * Used by the buffering systems to place data which is ready to be processed.
- * Has a finite size and will block operations which do not have what they
- * need need (either empty or full for peek and push respectively)
- */
+  uint32_t size; // number of elements in data vector
+  vector<node_id_t> &data; // vector of data for processing
+}
 
 class WorkQueue {
 public:
-  WorkQueue(int num_elements, int size_of_elm);
+  /*
+   * Construct a work queue
+   * @param num_elements  the number of queue slots
+   * @param max_elm_size  the maximum size of a data element
+   */
+  WorkQueue(int num_elements, int max_elm_size);
   ~WorkQueue();
 
   /* 
@@ -32,13 +29,13 @@ public:
    * @param   size the number of bytes in elm
    */
   void push(char *elm, int size);
-  
+
   /* 
    * Get data from the queue for processing
-   * @param   ret where the data from the work queue should be placed
+   * @param valid   did we successfully find data
    * @return  true if we were able to get good data, false otherwise
    */
-  bool peek(std::pair<int, queue_ret_t> &ret);
+  std::vector<node_id_t> &data peek(bool &valid);
 
   /*
    * Wait until the work queue has enough items in it to satisfy the request and then
@@ -47,16 +44,11 @@ public:
   bool peek_batch(std::vector<std::pair<int, queue_ret_t>> &ret, int batch_size);
   
   /* 
-   * Mark a queue element as ready to be overwritten.
-   * Call pop after processing the data from peek.
-   * @param   i is the position of the queue_elm which should be popped
+   * After processing data taken from the work queue call this function
+   * to mark the node as ready to be overwritten
+   * @param node   the LL node that we have finished processing
    */
-  void pop(int i);
-
-  std::condition_variable wq_full;
-  std::condition_variable wq_empty;
-  std::mutex read_lock;
-  std::mutex write_lock;
+  void peek_callback(std::vector<node_id_t> &data);
 
   // should WorkQueue peeks wait until they can succeed(false)
   // or return false on failure (true)
@@ -69,27 +61,35 @@ public:
   void print();
 
   // functions for checking if the queue is empty or full
-  inline bool full()  {return queue_array[head].dirty;} // if the next data item is dirty then full
-  // if place to read from is clean and has not been peeked already then queue is empty
-  inline bool empty() {return !queue_array[tail].dirty || queue_array[tail].touched;}
-  inline int get_size()   {return q_size.load();}
+  inline bool full()    {return producer_list == nullptr;} // if producer queue empty, wq full
+  inline bool empty()   {return consumer_list == nullptr;} // if consumer queue empty, wq empty
+  inline int get_size() {return q_size;}
+
 private:
-  int32_t len;      // maximum number of data elements to be stored in the queue
-  int32_t elm_size; // size of an individual element in bytes
+  WQLinkedList *producer_list = nullptr; // list of nodes ready to be written to
+  WQLinkedList *consumer_list = nullptr; // list of nodes with data for reading
 
-  std::atomic<int> head;    // where to push (starts at 0, write pointer)
-  std::atomic<int> tail;    // where to peek (starts at 0, read pointer)
-  std::atomic<int> q_size;  // the number of elements currently in queue
-  queue_elm *queue_array;   // array queue_elm metadata
-  char *data_array;         // the actual data
+  const int max_elm_size;
+  std::atomic<int> q_size;
 
-  // increment the head or tail pointer
-  inline int incr(int p) {return (p + 1) % len;}
-};
+  // locks and condition variables for producer list
+  std::condition_variable produce_condition;
+  std::mutex produce_list_lock;
+
+  // locks and condition variables for consumer list
+  std::condition_variable consume_condition;
+  std::mutex consume_list_lock;
+}
 
 class WriteTooBig : public std::exception {
+private:
+  int max_size;
+  int elm_size;
+
 public:
-  virtual const char * what() const throw() {
-    return "Write to work queue is too big";
+  WriteTooBig(elm_size, max_size) : elm_size(elm_size), max_size(max_size) {}
+
+  virtual const char *what() const throw() {
+    return "WQ: Write is too big " + std::to_string(elm_size) + " > " + std::to_string(max_size);
   }
-};
+}

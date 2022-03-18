@@ -189,3 +189,38 @@ TEST(GutterTreeTests, ParallelInsert) {
   ASSERT_EQ(num_updates, upd_processed);
   delete gt;
 }
+
+TEST(GutterTreeTests, ManyQueryThreads) {
+  const int nodes       = 1024;
+  const int num_updates = 5206;
+  const int buf_exp     = 17;
+  const int branch      = 8;
+
+  // here we limit the number of slots in the circular queue to 
+  // create contention between the threads. (we pass 5 threads and queue factor =1 instead of 20,8)
+  write_configuration(buf_exp, branch, 1, -2, 1); // 1 is queue_factor, -2 is gutter_factor
+
+  GutterTree *gt = new GutterTree("./test_", nodes, 5, true); // 5 is the number of workers
+  shutdown = false;
+  upd_processed = 0;
+  std::thread query_threads[20];
+  for (int t = 0; t < 20; t++) {
+    query_threads[t] = std::thread(querier, gt, nodes);
+  }
+  
+  for (int i = 0; i < num_updates; i++) {
+    update_t upd;
+    upd.first = i % nodes;
+    upd.second = (nodes - 1) - (i % nodes);
+    gt->insert(upd);
+  }
+  gt->force_flush();
+  shutdown = true;
+  gt->set_non_block(true); // switch to non-blocking calls in an effort to exit
+
+  for (int t = 0; t < 20; t++) {
+    query_threads[t].join();
+  }
+  ASSERT_EQ(num_updates, upd_processed);
+  delete gt;
+}
