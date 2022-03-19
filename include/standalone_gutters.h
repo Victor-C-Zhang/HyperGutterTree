@@ -14,7 +14,6 @@ private:
     std::vector<node_id_t> buffer;
   };
   uint32_t buffer_size; // size of a buffer (including metadata)
-  WorkQueue *wq;
   std::vector<Gutter> gutters; // array dump of numbers for performance:
                                                // DO NOT try to access directly!
 

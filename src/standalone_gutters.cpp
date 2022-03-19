@@ -12,7 +12,6 @@ StandAloneGutters::StandAloneGutters(node_id_t num_nodes, int workers) : gutters
 
   for (node_id_t i = 0; i < num_nodes; ++i) {
     gutters[i].buffer.reserve(buffer_size);
-    gutters[i].buffer.push_back(i); // second spot identifies the node to which the buffer
   }
 }
 
@@ -26,8 +25,8 @@ void StandAloneGutters::flush(node_id_t node_idx, std::vector<node_id_t> &buffer
 
 insert_ret_t StandAloneGutters::insert(const update_t &upd) {
   Gutter &gutter = gutters[upd.first];
-  std::vector<node_id_t> &ptr = gutter.buffer;
   const std::lock_guard<std::mutex> lock(gutter.mux);
+  std::vector<node_id_t> &ptr = gutter.buffer;
   ptr.push_back(upd.second);
   if (ptr.size() == buffer_size) { // full, so request flush
     flush(upd.first, ptr);
