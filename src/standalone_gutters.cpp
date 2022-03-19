@@ -5,126 +5,42 @@
 StandAloneGutters::StandAloneGutters(node_id_t num_nodes, int workers) : buffers(num_nodes) {
   configure_system(); // read buffering configuration file
 
-  // size of leaf proportional to size of sketch (add 1 because we have 1 metadata slots per buffer)
-  uint32_t bytes_size = floor(gutter_factor * sketch_size(num_nodes)) + sizeof(node_id_t);
-  buffer_size = bytes_size / sizeof(node_id_t);
-
-  wq = new WorkQueue(workers * queue_factor, bytes_size);
+  // size of leaf proportional to size of sketch
+  buffer_size = gutter_factor * sketch_size(num_nodes) / sizeof(node_id_t);
+  if (buffer_size < 4) buffer_size = 4;
+  wq = new WorkQueue(workers * queue_factor, buffer_size);
 
   for (node_id_t i = 0; i < num_nodes; ++i) {
-    buffers[i].reserve(buffer_size);
-    buffers[i].push_back(i); // second spot identifies the node to which the buffer
+    buffers[i] = new std::vector<node_id_t>();
+    buffers[i]->reserve(buffer_size);
   }
 }
 
 StandAloneGutters::~StandAloneGutters() {
+  for (auto &buffer : buffers) {
+    delete buffer;
+  }
   delete wq;
 }
 
-void StandAloneGutters::flush(std::vector<node_id_t> &buffer, uint32_t num_bytes) {
-  wq->push(reinterpret_cast<char *>(buffer.data()), num_bytes);
+void StandAloneGutters::flush(node_id_t node_idx, std::vector<node_id_t> *&buffer) {
+  wq->push(node_idx, buffer);
 }
 
 insert_ret_t StandAloneGutters::insert(const update_t &upd) {
-  std::vector<node_id_t> &ptr = buffers[upd.first];
-  ptr.push_back(upd.second);
-  if (ptr.size() == buffer_size) { // full, so request flush
-    flush(ptr, buffer_size*sizeof(node_id_t));
-    ptr.clear();
-    ptr.push_back(upd.first);
+  std::vector<node_id_t> *&ptr = buffers[upd.first];
+  ptr->push_back(upd.second);
+  if (ptr->size() == buffer_size) { // full, so request flush
+    flush(upd.first, ptr);
+    ptr->clear();
   }
-}
-
-// basically a copy of BufferTree::get_data()
-bool StandAloneGutters::get_data(data_ret_t &data) {
-  // make a request to the circular buffer for data
-  std::pair<int, queue_ret_t> queue_data;
-  bool got_data = wq->peek(queue_data);
-
-  if (!got_data)
-    return false; // we got no data so return not valid
-
-  int i                  = queue_data.first;
-  uint32_t len           = queue_data.second.first;
-  node_id_t *serial_data = reinterpret_cast<node_id_t *>(queue_data.second.second);
-  assert(len % sizeof(node_id_t) == 0);
-
-  if (len == 0)
-    return false; // we got no data so return not valid
-
-  // assume the first key is correct so extract it
-  node_id_t key = serial_data[0];
-  data.first = key;
-
-  data.second.clear(); // remove any old data from the vector
-  uint32_t vec_len  = len / sizeof(node_id_t);
-  data.second.reserve(vec_len); // reserve space for our updates
-
-  for (uint32_t j = 1; j < vec_len; ++j) {
-    data.second.push_back(serial_data[j]);
-  }
-
-  wq->pop(i); // mark the wq entry as clean
-  return true;
-}
-
-// ask the gutters for a batch of data
-// this function may sleep until data is available
-bool StandAloneGutters::get_data_batched(std::vector<data_ret_t> &batched_data, int batch_size) {
-  // make a request to the work queue for data
-  std::vector<std::pair<int, queue_ret_t>> queue_data_vec;
-  bool got_data = wq->peek_batch(queue_data_vec, batch_size);
-
-  if (!got_data)
-    return false; // we got no data so return not valid
-
-  batched_data.clear(); // remove any old data from the vector
-  for (auto &queue_data : queue_data_vec) {
-    int i                  = queue_data.first;
-    uint32_t len           = queue_data.second.first;
-    node_id_t *serial_data = reinterpret_cast<node_id_t *>(queue_data.second.second);
-    assert(len % sizeof(node_id_t) == 0);
-
-    if (len == 0) {
-      wq->pop(i);
-      continue;
-    }
-
-    data_ret_t data;
-
-    // assume the first key is correct so extract it
-    node_id_t key = serial_data[0];
-    data.first = key;
-
-    uint32_t vec_len  = len / sizeof(node_id_t);
-    data.second.reserve(vec_len); // reserve space for our updates
-
-    for (uint32_t j = 1; j < vec_len; ++j) {
-      data.second.push_back(serial_data[j]);
-    }
-
-    batched_data.push_back(data);
-    wq->pop(i); // mark the wq entry as clean
-  }
-  return true;
 }
 
 flush_ret_t StandAloneGutters::force_flush() {
-  for (auto & buffer : buffers) {
-    if (buffer.size() > 1) { // have stuff to flush
-      node_id_t i = buffer[0];
-      flush(buffer, buffer.size()*sizeof(node_id_t));
-      buffer.clear();
-      buffer.push_back(i);
+  for (node_id_t node_idx = 0; node_idx < buffers.size(); node_idx++) {
+    if (buffers[node_idx]->size() > 1) { // have stuff to flush
+      flush(node_idx, buffers[node_idx]);
+      buffers[node_idx]->clear();
     }
-  }
-}
-
-void StandAloneGutters::set_non_block(bool block) {
-  if (block) {
-    wq->no_block = true; // circular queue operations should no longer block
-    wq->wq_empty.notify_all();
-  } else {
-    wq->no_block = false; // set circular queue to block if necessary
   }
 }

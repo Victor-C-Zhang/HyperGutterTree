@@ -60,9 +60,6 @@ private:
   flush_ret_t do_flush(flush_struct &flush_from, uint32_t size, uint32_t begin, 
     node_id_t min_key, node_id_t max_key, uint16_t options, uint8_t level);
 
-  // Work queue in which we place leaves that fill up
-  WorkQueue *wq;
-
   /*
    * Variables which track universal information about the buffer tree which
    * we would like to be accesible to all the bufferControlBlocks

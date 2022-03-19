@@ -4,17 +4,28 @@
 #include <utility>
 #include <atomic>
 #include <vector>
-
-struct WQLinkedList {
-  // LL next pointer
-  WQLinkedList *next;
-
-  uint32_t size; // number of elements in data vector
-  vector<node_id_t> &data; // vector of data for processing
-}
+#include "types.h"
 
 class WorkQueue {
-public:
+ public:
+  class DataNode {
+   private:
+    // LL next pointer
+    DataNode *next = nullptr;
+    node_id_t node_idx = 0;
+    std::vector<node_id_t> *data_vec;
+
+    DataNode(const size_t vec_size) {
+      data_vec = new std::vector<node_id_t>();
+      data_vec->reserve(vec_size);
+    }
+
+    friend class WorkQueue;
+   public:
+    node_id_t get_node_idx() { return node_idx; }
+    std::vector<node_id_t> get_data_vec() { return *data_vec; }
+  };
+
   /*
    * Construct a work queue
    * @param num_elements  the number of queue slots
@@ -25,34 +36,32 @@ public:
 
   /* 
    * Add a data element to the queue
-   * @param   elm the data to be placed into the queue
-   * @param   size the number of bytes in elm
+   * @param data    reference to the data to be placed into the queue
+   * @param size    the number items in the vector
    */
-  void push(char *elm, int size);
+  void push(node_id_t node_idx, std::vector<node_id_t> *&data_vec);
 
   /* 
    * Get data from the queue for processing
-   * @param valid   did we successfully find data
+   * @param data   where to place the Data
    * @return  true if we were able to get good data, false otherwise
    */
-  std::vector<node_id_t> &data peek(bool &valid);
+  bool peek(DataNode *&data);
 
   /*
    * Wait until the work queue has enough items in it to satisfy the request and then
    * return batch_size number of work units
    */
-  bool peek_batch(std::vector<std::pair<int, queue_ret_t>> &ret, int batch_size);
+  bool peek_batch(std::vector<DataNode *> &data_vec, int batch_size);
   
   /* 
    * After processing data taken from the work queue call this function
    * to mark the node as ready to be overwritten
-   * @param node   the LL node that we have finished processing
+   * @param data   the LL node that we have finished processing
    */
-  void peek_callback(std::vector<node_id_t> &data);
+  void peek_callback(DataNode *data);
 
-  // should WorkQueue peeks wait until they can succeed(false)
-  // or return false on failure (true)
-  std::atomic<bool> no_block;
+  void set_non_block(bool _block);
 
   /*
    * Function which prints the work queue
@@ -66,30 +75,37 @@ public:
   inline int get_size() {return q_size;}
 
 private:
-  WQLinkedList *producer_list = nullptr; // list of nodes ready to be written to
-  WQLinkedList *consumer_list = nullptr; // list of nodes with data for reading
+  DataNode *producer_list = nullptr; // list of nodes ready to be written to
+  DataNode *consumer_list = nullptr; // list of nodes with data for reading
 
+  const int len;
   const int max_elm_size;
   std::atomic<int> q_size;
 
   // locks and condition variables for producer list
-  std::condition_variable produce_condition;
-  std::mutex produce_list_lock;
+  std::condition_variable producer_condition;
+  std::mutex producer_list_lock;
 
   // locks and condition variables for consumer list
-  std::condition_variable consume_condition;
-  std::mutex consume_list_lock;
-}
+  std::condition_variable consumer_condition;
+  std::mutex consumer_list_lock;
+  size_t consumer_list_size; // size of consumer list for peek_batch
+
+  // should WorkQueue peeks wait until they can succeed(false)
+  // or return false on failure (true)
+  bool non_block;
+};
 
 class WriteTooBig : public std::exception {
 private:
-  int max_size;
-  int elm_size;
+  const int elm_size;
+  const int max_size;
 
 public:
-  WriteTooBig(elm_size, max_size) : elm_size(elm_size), max_size(max_size) {}
+  WriteTooBig(int elm_size, int max_size) : elm_size(elm_size), max_size(max_size) {}
 
   virtual const char *what() const throw() {
-    return "WQ: Write is too big " + std::to_string(elm_size) + " > " + std::to_string(max_size);
+    return ("WQ: Write is too big " + std::to_string(elm_size) + " > " + 
+      std::to_string(max_size)).c_str();
   }
-}
+};

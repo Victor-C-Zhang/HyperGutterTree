@@ -30,7 +30,7 @@ class CacheGutterTree : public GutteringSystem {
   struct CacheGutterTreeConfig {
     const size_t numLevels;
     const size_t bufferSize;
-    WorkQueue &wq;
+    WorkQueue *wq;
   };
 
   class CacheGutterTreeNode {
@@ -100,7 +100,6 @@ class CacheGutterTree : public GutteringSystem {
   uint32_t bytes_size; // size of leaf in bytes
 
   static constexpr double epsilon = 0.1;
-  WorkQueue wq;
   CacheGutterTreeConfig config;
   CacheGutterTreeNode root;
 
