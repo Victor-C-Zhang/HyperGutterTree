@@ -9,7 +9,7 @@
 class StandAloneGutters : public GutteringSystem {
 private:
   uint32_t buffer_size; // size of a buffer (including metadata)
-  std::vector<std::vector<node_id_t>*> buffers; // array dump of numbers for performance:
+  std::vector<std::vector<node_id_t>> buffers; // array dump of numbers for performance:
                                                // DO NOT try to access directly!
 
   /**
@@ -17,7 +17,7 @@ private:
    * @param buffer      a pointer to the head of the buffer to flush.
    * @param num_bytes   the number of bytes to flush.
    */
-  void flush(node_id_t node_idx, std::vector<node_id_t> *&buffer);
+  void flush(node_id_t node_idx, std::vector<node_id_t> &buffer);
 public:
   /**
    * Constructs a new .

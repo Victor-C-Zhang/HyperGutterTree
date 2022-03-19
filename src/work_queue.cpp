@@ -34,9 +34,9 @@ WorkQueue::~WorkQueue() {
   }
 }
 
-void WorkQueue::push(node_id_t node_idx, std::vector<node_id_t> *&data_vec) {
-  if(data_vec->size() > max_elm_size) {
-    throw WriteTooBig(data_vec->size(), max_elm_size);
+void WorkQueue::push(node_id_t node_idx, std::vector<node_id_t> &data_vec) {
+  if(data_vec.size() > max_elm_size) {
+    throw WriteTooBig(data_vec.size(), max_elm_size);
   }
 
   std::unique_lock<std::mutex> lk(producer_list_lock);
@@ -52,7 +52,8 @@ void WorkQueue::push(node_id_t node_idx, std::vector<node_id_t> *&data_vec) {
 
   // set node id and swap pointers
   node->node_idx = node_idx; // node id
-  std::swap(node->data_vec, data_vec); // vector reference
+  std::swap(node->data_vec, data_vec);
+  //std::swap(node->data_vec, data_vec); // vector reference
 
   // add this block to the consumer queue for processing
   consumer_list_lock.lock();
@@ -97,6 +98,7 @@ bool WorkQueue::peek_batch(std::vector<DataNode *> &data_vec, int batch_size) {
 
   // wait until consumer queue is large enough
   std::unique_lock<std::mutex> lk(consumer_list_lock);
+  //FIXME: This version of batch waiting causes a lot of contention on the mutex.
   consumer_condition.wait(lk, 
     [this, batch_size]{return consumer_list_size >= batch_size || non_block;});
 
@@ -144,14 +146,14 @@ void WorkQueue::print() {
   int p_size = 0;
   DataNode *temp = producer_list;
   while (temp != nullptr) {
-    to_print += std::to_string(p_size) + ": " + std::to_string((uint64_t)temp->data_vec) + "\n";
+    to_print += std::to_string(p_size) + ": " + std::to_string((uint64_t)&temp->data_vec) + "\n";
     temp = temp->next;
     ++p_size;
   }
   int c_size = 0;
   temp = consumer_list;
   while (temp != nullptr) {
-    to_print += std::to_string(c_size) + ": " + std::to_string((uint64_t)temp->data_vec) + "\n";
+    to_print += std::to_string(c_size) + ": " + std::to_string((uint64_t)&temp->data_vec) + "\n";
     temp = temp->next;
     ++c_size;
   }

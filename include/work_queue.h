@@ -13,17 +13,16 @@ class WorkQueue {
     // LL next pointer
     DataNode *next = nullptr;
     node_id_t node_idx = 0;
-    std::vector<node_id_t> *data_vec;
+    std::vector<node_id_t> data_vec;
 
     DataNode(const size_t vec_size) {
-      data_vec = new std::vector<node_id_t>();
-      data_vec->reserve(vec_size);
+      data_vec.reserve(vec_size);
     }
 
     friend class WorkQueue;
    public:
     node_id_t get_node_idx() { return node_idx; }
-    std::vector<node_id_t> get_data_vec() { return *data_vec; }
+    std::vector<node_id_t>& get_data_vec() { return data_vec; }
   };
 
   /*
@@ -39,7 +38,7 @@ class WorkQueue {
    * @param data    reference to the data to be placed into the queue
    * @param size    the number items in the vector
    */
-  void push(node_id_t node_idx, std::vector<node_id_t> *&data_vec);
+  void push(node_id_t node_idx, std::vector<node_id_t> &data_vec);
 
   /* 
    * Get data from the queue for processing
