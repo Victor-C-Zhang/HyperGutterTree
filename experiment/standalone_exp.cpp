@@ -74,14 +74,25 @@ void run_test(const int nodes, const unsigned long updates, const unsigned int n
   delete gutters;
 }
 
-TEST(SA_Throughput, kron15) {
+TEST(SA_Throughput, kron15_10threads) {
   run_test(8192, 17542263, 10);
 }
 
-TEST(SA_Throughput, kron17) {
+TEST(SA_Throughput, kron15_20threads) {
+  run_test(8192, 17542263, 20);
+}
+
+TEST(SA_Throughput, kron17_10threads) {
   run_test(131072, 4474931789, 10);
 }
 
-TEST(SA_Throughput, kron18) {
+TEST(SA_Throughput, kron17_20threads) {
+  run_test(131072, 4474931789, 20);
+}
+
+TEST(SA_Throughput, kron18_10threads) {
   run_test(262144, 17891985703, 10);
+}
+TEST(SA_Throughput, kron18_20threads) {
+  run_test(262144, 17891985703, 20);
 }
