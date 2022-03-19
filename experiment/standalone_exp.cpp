@@ -7,14 +7,15 @@
 
 static bool shutdown = false;
 
-// queries the buffer tree and verifies that the data
+// queries the guttering system
 // Should be run in a seperate thread
-void querier(StandAloneGutters *wq) {
-  data_ret_t data;
+void querier(GutteringSystem *gts) {
+  WorkQueue::DataNode *data;
   while(true) {
-    bool valid = wq->get_data(data);
+    bool valid = gts->get_data(data);
     if(!valid && shutdown)
       return;
+    gts->get_data_callback(data);
   }
 }
 

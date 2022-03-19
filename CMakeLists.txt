@@ -100,9 +100,9 @@ if (BUILD_EXE)
   )
   target_link_libraries(buffering_tests PRIVATE GutterTree)
 
-  # add_executable(buffering_experiment
-  #   experiment/runner.cpp
+  add_executable(buffering_experiment
+    experiment/runner.cpp
   #   experiment/gutter_tree_exp.cpp
-  #   experiment/standalone_exp.cpp)
-  # target_link_libraries(buffering_experiment PRIVATE GutterTree)
+    experiment/standalone_exp.cpp)
+  target_link_libraries(buffering_experiment PRIVATE GutterTree)
 endif()
