@@ -3,83 +3,160 @@
 
 #include <string.h>
 #include <chrono>
+#include <cassert>
 
-WorkQueue::WorkQueue(int num_elements, int size_of_elm): 
-  len(num_elements), elm_size(size_of_elm) {
-  head = 0;
-  tail = 0;
-  no_block = false;
+WorkQueue::WorkQueue(int q_len, int max_elm_size) : len(q_len), max_elm_size(max_elm_size) {
+  non_block = false;
 
-  // malloc the memory for the work queue
-  queue_array = (queue_elm *) malloc(sizeof(queue_elm) * len);
-  data_array = (char *) malloc(elm_size * len * sizeof(char));
+  // place all nodes of linked list in the producer queue and reserve
+  // memory for the vectors
   for (int i = 0; i < len; i++) {
-    queue_array[i].data    = data_array + (elm_size * i);
-    queue_array[i].dirty   = false;
-    queue_array[i].touched = false;
-    queue_array[i].size    = 0;
+    DataNode *node = new DataNode(max_elm_size); // create and reserve space for updates
+    node->next = producer_list; // next of node is head
+    producer_list = node; // set head to new node
   }
+  q_size = 0;
 
-  printf("WQ: created work queue with %i elements each of size %i\n", len, elm_size);
+  printf("WQ: created work queue with %i elements each of size %i\n", len, max_elm_size);
 }
 
 WorkQueue::~WorkQueue() {
-  // free the queue
-  free(data_array);
-  free(queue_array);
-}
-
-void WorkQueue::push(char *elm, int size) {
-  if(size > elm_size) {
-    printf("WQ: write of size %i bytes greater than max of %i\n", size, elm_size);
-    throw WriteTooBig();
+  // free data from the queues
+  while (producer_list != nullptr) {
+    DataNode *temp = producer_list;
+    producer_list = producer_list->next;
+    delete temp;
   }
-
-  while(true) {
-    std::unique_lock<std::mutex> lk(rw_lock);
-    // printf("WQ: push: wait on not-full. full() = %s\n", (full())? "true" : "false");
-    wq_full.wait_for(lk, std::chrono::milliseconds(500), [this]{return !full();});
-    if(!full()) {
-      memcpy(queue_array[head].data, elm, size);
-      queue_array[head].dirty = true;
-      queue_array[head].size = size;
-      head = incr(head);
-      lk.unlock();
-      wq_empty.notify_one();
-      break;
-    }
-    lk.unlock();
+  while (consumer_list != nullptr) {
+    DataNode *temp = consumer_list;
+    consumer_list = consumer_list->next;
+    delete temp;
   }
 }
 
-bool WorkQueue::peek(std::pair<int, queue_elm> &ret) {
-  do {
-    std::unique_lock<std::mutex> lk(rw_lock);
-    wq_empty.wait_for(lk, std::chrono::milliseconds(500), [this]{return (!empty() || no_block);});
-    if(!empty()) {
-      int temp = tail;
-      queue_array[tail].touched = true;
-      tail = incr(tail);
-      lk.unlock();
+void WorkQueue::push(node_id_t node_idx, std::vector<node_id_t> &data_vec) {
+  if(data_vec.size() > max_elm_size) {
+    throw WriteTooBig(data_vec.size(), max_elm_size);
+  }
 
-      ret.first = temp;
-      ret.second = queue_array[temp];
-      return true;
-    }
-    lk.unlock();
-  }while(!no_block);
-  return false;
+  std::unique_lock<std::mutex> lk(producer_list_lock);
+  producer_condition.wait(lk, [this]{return !full();});
+
+  // printf("WQ: Push:\n");
+  // print();
+
+  // remove head from produce_list
+  DataNode *node = producer_list;
+  producer_list = producer_list->next;
+  lk.unlock();
+
+  // set node id and swap pointers
+  node->node_idx = node_idx; // node id
+  std::swap(node->data_vec, data_vec);
+  //std::swap(node->data_vec, data_vec); // vector reference
+
+  // add this block to the consumer queue for processing
+  consumer_list_lock.lock();
+  node->next = consumer_list;
+  consumer_list = node;
+  ++consumer_list_size;
+  consumer_list_lock.unlock();
+  consumer_condition.notify_one();
 }
 
-void WorkQueue::pop(int i) {
-  rw_lock.lock();
-  queue_array[i].dirty   = false; // this data has been processed and this slot may now be overwritten
-  queue_array[i].touched = false; // may read this slot
-  rw_lock.unlock();
-  wq_full.notify_one();
+bool WorkQueue::peek(DataNode *&data) {
+  // wait while queue is empty
+  // printf("waiting to peek\n");
+  std::unique_lock<std::mutex> lk(consumer_list_lock);
+  consumer_condition.wait(lk, [this]{return !empty() || non_block;});
+
+  // printf("WQ: Peek\n");
+  // print();
+
+  // if non_block and queue is empty then there is no data to get
+  // so inform the caller of this
+  if (empty()) {
+    lk.unlock();
+    return false;
+  }
+
+  // remove head from consumer_list and release lock
+  DataNode *node = consumer_list;
+  consumer_list = consumer_list->next;
+  --consumer_list_size;
+  lk.unlock();
+
+  data = node;
+  return true;
+}
+
+bool WorkQueue::peek_batch(std::vector<DataNode *> &data_vec, int batch_size) {
+  assert(batch_size <= len); // cannot request a batch bigger than the work queue
+
+  data_vec.clear(); // clear out any old data
+  data_vec.reserve(batch_size);
+
+  // wait until consumer queue is large enough
+  std::unique_lock<std::mutex> lk(consumer_list_lock);
+  //FIXME: This version of batch waiting causes a lot of contention on the mutex.
+  consumer_condition.wait(lk, 
+    [this, batch_size]{return consumer_list_size >= batch_size || non_block;});
+
+  // printf("WQ: Peek-batch\n");
+  // print();
+
+  if (empty()) {
+    lk.unlock();
+    return false;
+  }
+
+  // pull data from head of consumer_list
+  for(int i = 0; i < batch_size; i++) {
+    if (consumer_list == nullptr) break; // if non_block is true may not be able to get full batch
+
+    data_vec.push_back(consumer_list);
+    consumer_list = consumer_list->next;
+    --consumer_list_size;
+  }
+
+  lk.unlock();
+  return true;
+}
+
+void WorkQueue::peek_callback(DataNode *node) {
+  producer_list_lock.lock();
+  // printf("WQ: Callback\n");
+  // print();
+  node->next = producer_list;
+  producer_list = node;
+  producer_list_lock.unlock();
+  producer_condition.notify_one();
+  // printf("WQ: Callback done\n");
+}
+
+void WorkQueue::set_non_block(bool _block) {
+  consumer_list_lock.lock();
+  non_block = _block;
+  consumer_list_lock.unlock();
+  consumer_condition.notify_all();
 }
 
 void WorkQueue::print() {
-  printf("WQ: head=%i, tail=%i, is_full=%s, is_empty=%s\n", 
-    head, tail, full()? "true" : "false", empty()? "true" : "false");
+  std::string to_print = "";
+
+  int p_size = 0;
+  DataNode *temp = producer_list;
+  while (temp != nullptr) {
+    to_print += std::to_string(p_size) + ": " + std::to_string((uint64_t)&temp->data_vec) + "\n";
+    temp = temp->next;
+    ++p_size;
+  }
+  int c_size = 0;
+  temp = consumer_list;
+  while (temp != nullptr) {
+    to_print += std::to_string(c_size) + ": " + std::to_string((uint64_t)&temp->data_vec) + "\n";
+    temp = temp->next;
+    ++c_size;
+  }
+  printf("WQ: producer_queue size = %i consumer_queue size = %i\n%s", p_size, c_size, to_print.c_str());
 }

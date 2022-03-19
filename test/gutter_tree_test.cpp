@@ -16,7 +16,7 @@ static std::atomic<uint32_t> upd_processed;
 // queries the buffer tree and verifies that the data
 // returned makes sense
 // Should be run in a seperate thread
-void querier(GutterTree *gt, int nodes) {
+static void querier(GutterTree *gt, int nodes) {
   data_ret_t data;
   while(true) {
     bool valid = gt->get_data(data);
@@ -35,7 +35,7 @@ void querier(GutterTree *gt, int nodes) {
   }
 }
 
-void write_configuration(uint32_t buffer_exp, uint32_t fanout, int queue_factor, 
+static void write_configuration(uint32_t buffer_exp, uint32_t fanout, int queue_factor, 
                         int page_factor, int num_threads) {
   std::ofstream conf("./buffering.conf");
   conf << "buffer_exp=" << buffer_exp << std::endl;
@@ -50,7 +50,7 @@ void write_configuration(uint32_t buffer_exp, uint32_t fanout, int queue_factor,
 // this test only works if the depth of the tree does not exceed 1
 // and no work is claimed off of the work queue
 // to work correctly num_updates must be a multiple of nodes
-void run_test(const uint32_t nodes, const uint32_t num_updates, const int buffer_exp, const int branch_factor) {
+static void run_test(const uint32_t nodes, const uint32_t num_updates, const int buffer_exp, const int branch_factor) {
   printf("Running Test: nodes=%i num_updates=%i buffer_exp 2^%i branch_factor %i\n",
          nodes, num_updates, buffer_exp, branch_factor);
 
@@ -179,6 +179,41 @@ TEST(GutterTreeTests, ParallelInsert) {
     gt->insert(upd);
   }
   printf("force flush\n");
+  gt->force_flush();
+  shutdown = true;
+  gt->set_non_block(true); // switch to non-blocking calls in an effort to exit
+
+  for (int t = 0; t < 20; t++) {
+    query_threads[t].join();
+  }
+  ASSERT_EQ(num_updates, upd_processed);
+  delete gt;
+}
+
+TEST(GutterTreeTests, ManyQueryThreads) {
+  const int nodes       = 1024;
+  const int num_updates = 5206;
+  const int buf_exp     = 17;
+  const int branch      = 8;
+
+  // here we limit the number of slots in the circular queue to 
+  // create contention between the threads. (we pass 5 threads and queue factor =1 instead of 20,8)
+  write_configuration(buf_exp, branch, 1, -2, 1); // 1 is queue_factor, -2 is gutter_factor
+
+  GutterTree *gt = new GutterTree("./test_", nodes, 5, true); // 5 is the number of workers
+  shutdown = false;
+  upd_processed = 0;
+  std::thread query_threads[20];
+  for (int t = 0; t < 20; t++) {
+    query_threads[t] = std::thread(querier, gt, nodes);
+  }
+  
+  for (int i = 0; i < num_updates; i++) {
+    update_t upd;
+    upd.first = i % nodes;
+    upd.second = (nodes - 1) - (i % nodes);
+    gt->insert(upd);
+  }
   gt->force_flush();
   shutdown = true;
   gt->set_non_block(true); // switch to non-blocking calls in an effort to exit

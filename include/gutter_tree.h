@@ -8,7 +8,7 @@
 #include "types.h"
 #include "buffer_control_block.h"
 #include "work_queue.h"
-#include "buffering_system.h"
+#include "guttering_system.h"
 
 typedef void insert_ret_t;
 typedef void flush_ret_t;
@@ -19,7 +19,7 @@ struct flush_struct;
 /*
  * Structure of the GutterTree
  */
-class GutterTree : public BufferingSystem {
+class GutterTree : public GutteringSystem {
 private:
   // root directory of tree
   std::string dir;
@@ -60,23 +60,14 @@ private:
   flush_ret_t do_flush(flush_struct &flush_from, uint32_t size, uint32_t begin, 
     node_id_t min_key, node_id_t max_key, uint16_t options, uint8_t level);
 
-  // Work queue in which we place leaves that fill up
-  WorkQueue *wq;
-
   /*
    * Variables which track universal information about the buffer tree which
    * we would like to be accesible to all the bufferControlBlocks
    */
-  uint32_t page_size;    // write granularity
   uint8_t  max_level;    // max depth of the tree
-  uint32_t buffer_size;  // size of an internal node buffer
-  uint32_t fanout;       // maximum number of children per node
   uint32_t num_nodes;    // number of unique ids to buffer
   uint64_t backing_EOF;  // file to write tree to
   uint64_t leaf_size;    // size of a leaf buffer
-  uint32_t queue_factor; // number of elements in queue is this factor * num_workers
-  uint32_t num_flushers; // the number of flush threads
-  float gutter_factor;   // factor which increases/decreases the leaf gutter size
 
   //File descriptor of backing file for storage
   int backing_store;
@@ -114,6 +105,14 @@ public:
    */
   bool get_data(data_ret_t &data);
 
+  /*
+   * Ask for batch_size amount of data.
+   * @param batched_data   where to store the data
+   * @param batch_size     the amount of gutters to give
+   * @return               true if got valid data, false if unable to get data.
+   */
+  bool get_data_batched(std::vector<data_ret_t> &batched_data, int batch_size);
+
   /**
    * Flushes the entire tree down to the leaves.
    * @return nothing.
@@ -141,6 +140,11 @@ public:
    * @return   nothing
    */
   void set_non_block(bool block);
+
+  /*
+   * Access the maximum number of updates per gutter added to the work queue
+   */
+  int upds_per_gutter() { return (leaf_size + page_size) / serial_update_size; }
 
   /*
    * Function to convert an update_t to a char array

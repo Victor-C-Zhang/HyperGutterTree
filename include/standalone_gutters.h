@@ -1,12 +1,12 @@
 #pragma once
 #include "work_queue.h"
 #include "types.h"
-#include "buffering_system.h"
+#include "guttering_system.h"
 
 /**
  * In-memory wrapper to offer the same interface as a buffer tree.
  */
-class StandAloneGutters : public BufferingSystem {
+class StandAloneGutters : public GutteringSystem {
 private:
   struct Gutter
   { 
@@ -23,19 +23,13 @@ private:
    * @param gutter      a pointer to the head of the gutter to flush.
    * @param num_bytes   the number of bytes to flush.
    */
-  void flush(Gutter &gutter, uint32_t num_bytes);
-
+  void flush(node_id_t node_idx, std::vector<node_id_t> &buffer);
   /**
    * Use buffering.conf configuration file to determine parameters of the StandAloneGutters
    * Sets the following variables
    * Queue_Factor :   The number of queue slots per worker removing data from the queue
    * Size_Factor  :   Decrease the amount of bytes used per node by this multiplicative factor
    */
-  void configure();
-
-  // configuration variables
-  uint32_t queue_factor; // number of elements in queue is this factor * num_workers
-  float gutter_factor;   // factor which increases/decreases the leaf gutter size
 public:
   /**
    * Constructs a new .
@@ -55,27 +49,15 @@ public:
   insert_ret_t insert(const update_t &upd);
 
   /**
-   * Ask the buffer queue for data and sleep if necessary until it is available.
-   * @param data        to store the fetched data.
-   * @return            true if got valid data, false if unable to get data.
-   */
-  bool get_data(data_ret_t& data);
-
-  /**
    * Flushes all pending buffers.
    * @return nothing.
    */
   flush_ret_t force_flush();
 
-  /**
-   * Notifies all threads waiting on condition variables that they should
-   * check their wait condition again. Useful when switching from blocking to
-   * non-blocking calls to the circular queue.
-   * For example: we set this to true when shutting down the graph_workers.
-   * @param    block is true if we should turn on non-blocking operations
-   *           and false if we should turn them off.
+  /*
+   * Access the size of a leaf gutter through the GutteringSystem abstract class
    */
-  void set_non_block(bool block);
+  int upds_per_gutter() { return buffer_size / sizeof(node_id_t); }
 
   static const uint32_t serial_update_size = sizeof(node_id_t);
 };

@@ -3,7 +3,7 @@
 #include "../include/gt_file_errors.h"
 
 #include <utility>
-#include <unistd.h> //sysconf
+#include <unistd.h> //open and close
 #include <string.h> //memcpy
 #include <fcntl.h>  //posix_fallocate
 #include <errno.h>
@@ -16,7 +16,7 @@
  * We assume that node indices begin at 0 and increase to N-1
  */
 GutterTree::GutterTree(std::string dir, node_id_t nodes, int workers, bool reset=false) : dir(dir), num_nodes(nodes) {
-  configure_tree();
+  configure_system();
 
   page_size = (page_size % serial_update_size == 0)? page_size : page_size + serial_update_size - page_size % serial_update_size;
   if (buffer_size < page_size) {
@@ -81,76 +81,6 @@ GutterTree::~GutterTree() {
   }
   free(flushers);
   close(backing_store);
-}
-
-void GutterTree::configure_tree() {
-  uint32_t buffer_exp  = 20;
-  uint16_t branch      = 64;
-  int queue_f          = 2;
-  int page_factor      = 1;
-  int n_fushers        = 1;
-  float gutter_f       = 1;
-  std::string line;
-  std::ifstream conf("./buffering.conf");
-  if (conf.is_open()) {
-    while(getline(conf, line)) {
-      if (line[0] == '#' || line[0] == '\n') continue;
-      if(line.substr(0, line.find('=')) == "buffer_exp") {
-        buffer_exp  = std::stoi(line.substr(line.find('=') + 1));
-        if (buffer_exp > 30 || buffer_exp < 10) {
-          printf("WARNING: buffer_exp out of bounds [10,30] using default(20)\n");
-          buffer_exp = 20;
-        }
-      }
-      if(line.substr(0, line.find('=')) == "branch") {
-        branch = std::stoi(line.substr(line.find('=') + 1));
-        if (branch > 2048 || branch < 2) {
-          printf("WARNING: branch out of bounds [2,2048] using default(64)\n");
-          branch = 64;
-        }
-      }
-      if(line.substr(0, line.find('=')) == "queue_factor") {
-        queue_f = std::stoi(line.substr(line.find('=') + 1));
-        if (queue_f > 16 || queue_f < 1) {
-          printf("WARNING: queue_factor out of bounds [1,16] using default(2)\n");
-          queue_f = 2;
-        }
-      }
-      if(line.substr(0, line.find('=')) == "page_factor") {
-        page_factor = std::stoi(line.substr(line.find('=') + 1));
-        if (page_factor > 50 || page_factor < 1) {
-          printf("WARNING: page_factor out of bounds [1,50] using default(1)\n");
-          page_factor = 1;
-        }
-      }
-      if(line.substr(0, line.find('=')) == "num_threads") {
-        n_fushers = std::stoi(line.substr(line.find('=') + 1));
-        if (n_fushers > 20 || n_fushers < 1) {
-          printf("WARNING: num_threads out of bounds [1,20] using default(1)\n");
-          n_fushers = 1;
-        }
-      }
-      if(line.substr(0, line.find('=')) == "gutter_factor") {
-        gutter_f = std::stof(line.substr(line.find('=') + 1));
-        if (gutter_f < 1 && gutter_f > -1) {
-          printf("WARNING: gutter_factor must be outside of range -1 < x < 1 using default(1)\n");
-          gutter_f = 1;
-        }
-      }
-    }
-  } else {
-    printf("WARNING: Could not open buffering configuration file! Using default setttings.\n");
-  }
-  buffer_size = 1 << buffer_exp;
-  fanout = branch;
-  queue_factor = queue_f;
-  num_flushers = n_fushers;
-  page_size = page_factor * sysconf(_SC_PAGE_SIZE); // works on POSIX systems (alternative is boost)
-  // Windows may need https://docs.microsoft.com/en-us/windows/win32/api/sysinfoapi/nf-sysinfoapi-getnativesysteminfo?redirectedfrom=MSDN
-
-  gutter_factor = gutter_f;
-  if (gutter_factor < 0)
-    gutter_factor = 1 / (-1 * gutter_factor); // gutter factor reduces size if negative
 }
 
 void print_tree(std::vector<BufferControlBlock *>bcb_list) {
@@ -465,17 +395,16 @@ flush_ret_t inline GutterTree::flush_leaf_node(flush_struct &flush_from, BufferC
 bool GutterTree::get_data(data_ret_t &data) {
   File_Pointer idx = 0;
 
-  // make a request to the circular buffer for data
-  std::pair<int, queue_elm> queue_data;
+  // make a request to the work_queue for data
+  std::pair<int, queue_ret_t> queue_data;
   bool got_data = wq->peek(queue_data);
 
   if (!got_data)
     return false; // we got no data so return not valid
 
-  int i         = queue_data.first;
-  queue_elm elm = queue_data.second;
-  char *serial_data = elm.data;
-  uint32_t len      = elm.size;
+  int i             = queue_data.first;
+  uint32_t len      = queue_data.second.first;
+  char *serial_data = queue_data.second.second;
 
   if (len == 0) {
     wq->pop(i);
@@ -501,6 +430,7 @@ bool GutterTree::get_data(data_ret_t &data) {
       // error to handle some weird unlikely gutter_tree shenanigans
       printf("source node %u and key %u do not match in get_data()\n", upd.first, key);
       printf("idx = %lu  len = %u\n", idx, len);
+      wq->print();
       throw KeyIncorrectError();
     }
 
@@ -510,6 +440,62 @@ bool GutterTree::get_data(data_ret_t &data) {
   }
 
   wq->pop(i); // mark the wq entry as clean
+  return true;
+}
+
+// ask the gutter_tree for a batch of data
+// this function may sleep until data is available
+bool GutterTree::get_data_batched(std::vector<data_ret_t> &batched_data, int batch_size) {
+
+  // make a request to the work queue for data
+  std::vector<std::pair<int, queue_ret_t>> queue_data_vec;
+  bool got_data = wq->peek_batch(queue_data_vec, batch_size);
+
+  if (!got_data)
+    return false; // we got no data so return not valid
+
+  batched_data.clear(); // remove any old data from the vector
+  for (auto &queue_data : queue_data_vec) {
+    File_Pointer idx  = 0;
+    int i             = queue_data.first;
+    uint32_t len      = queue_data.second.first;
+    char *serial_data = queue_data.second.second;
+
+    if (len == 0) {
+      wq->pop(i);
+      continue;
+    }
+
+    uint32_t vec_len  = len / serial_update_size;
+    data_ret_t data;
+    data.second.reserve(vec_len); // reserve space for our updates
+
+    // assume the first key is correct so extract it
+    node_id_t key = load_key(serial_data);
+    data.first = key;
+
+    while(idx < (uint64_t) len) {
+      update_t upd = deserialize_update(serial_data + idx);
+      // printf("got update: %lu %lu\n", upd.first, upd.second);
+      if (upd.first == 0 && upd.second == 0) {
+        break; // got a null entry so done
+      }
+
+      if (upd.first != key) {
+        // error to handle some weird unlikely gutter_tree shenanigans
+        printf("source node %u and key %u do not match in get_data()\n", upd.first, key);
+        printf("idx = %lu  len = %u\n", idx, len);
+        wq->print();
+        throw KeyIncorrectError();
+      }
+
+      // printf("query to node %lu got edge to node %lu\n", key, upd.second);
+      data.second.push_back(upd.second);
+      idx += serial_update_size;
+    }
+    batched_data.push_back(data);
+    wq->pop(i); // mark the wq entry as clean
+  }
   return true;
 }
 
