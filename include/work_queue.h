@@ -35,10 +35,11 @@ class WorkQueue {
 
   /* 
    * Add a data element to the queue
-   * @param data    reference to the data to be placed into the queue
-   * @param size    the number items in the vector
+   * @param node_idx  the graph node id these updates are associated with
+   * @param data_vec  vector of updates
+   *
    */
-  void push(node_id_t node_idx, std::vector<node_id_t> &data_vec);
+  void push(node_id_t node_idx, std::vector<node_id_t> &upd_vec);
 
   /* 
    * Get data from the queue for processing
@@ -49,9 +50,11 @@ class WorkQueue {
 
   /*
    * Wait until the work queue has enough items in it to satisfy the request and then
-   * return batch_size number of work units
+   * @param node_vec     where to place the batch of Data
+   * @param batch_size   the amount of Data requested
+   * return true if able to get good data, false otherwise
    */
-  bool peek_batch(std::vector<DataNode *> &data_vec, int batch_size);
+  bool peek_batch(std::vector<DataNode *> &node_vec, int batch_size);
   
   /* 
    * After processing data taken from the work queue call this function
@@ -71,7 +74,6 @@ class WorkQueue {
   // functions for checking if the queue is empty or full
   inline bool full()    {return producer_list == nullptr;} // if producer queue empty, wq full
   inline bool empty()   {return consumer_list == nullptr;} // if consumer queue empty, wq empty
-  inline int get_size() {return q_size;}
 
 private:
   DataNode *producer_list = nullptr; // list of nodes ready to be written to
@@ -79,7 +81,6 @@ private:
 
   const int len;
   const int max_elm_size;
-  std::atomic<int> q_size;
 
   // locks and condition variables for producer list
   std::condition_variable producer_condition;

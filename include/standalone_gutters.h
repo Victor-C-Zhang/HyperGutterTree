@@ -38,8 +38,6 @@ public:
    */
   StandAloneGutters(node_id_t nodes, int workers);
 
-  ~StandAloneGutters();
-
   /**
    * Puts an update into the data structure.
    * @param upd the edge update.
@@ -52,11 +50,4 @@ public:
    * @return nothing.
    */
   flush_ret_t force_flush();
-
-  /*
-   * Access the size of a leaf gutter through the GutteringSystem abstract class
-   */
-  int upds_per_gutter() { return buffer_size / sizeof(node_id_t); }
-
-  static const uint32_t serial_update_size = sizeof(node_id_t);
 };
