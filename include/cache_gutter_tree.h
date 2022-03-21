@@ -97,10 +97,9 @@ class CacheGutterTree : public GutteringSystem {
       }
     }
   };
-  uint32_t bytes_size; // size of leaf in bytes
+  uint32_t buffer_size; // number of updates per leaf
 
   static constexpr double epsilon = 0.1;
-  WorkQueue wq;
   CacheGutterTreeConfig config;
   CacheGutterTreeNode root;
 
@@ -112,9 +111,8 @@ class CacheGutterTree : public GutteringSystem {
    * Note: using comma operator in a hacky way to configure the system before initializing
    */
   CacheGutterTree(node_id_t nodes, int workers) :
-    bytes_size((configure_system(), gutter_factor * sketch_size(nodes))),
-    wq{workers * (int) queue_factor, (int) bytes_size},
-    config{getNumLevels(nodes), (size_t)(gutter_factor*sketch_size(nodes)/sizeof(node_id_t)), wq},
+    GutteringSystem(nodes, workers),
+    config{getNumLevels(nodes), buffer_size, wq},
     root{std::pair<size_t, size_t>(0, nodes - 1), 0, config} {}
 
   /**
@@ -125,30 +123,8 @@ class CacheGutterTree : public GutteringSystem {
   insert_ret_t insert(const update_t &upd) { root.insert(upd); }
 
   /**
-   * Ask the buffer queue for data and sleep if necessary until it is available.
-   * @param data        to store the fetched data.
-   * @return            true if got valid data, false if unable to get data.
-   */
-  bool get_data(data_ret_t &data);
-
-  /**
    * Flushes all pending buffers.
    * @return nothing.
    */
   flush_ret_t force_flush() { root.flush_tree(); }
-
-  /**
-   * Notifies all threads waiting on condition variables that they should
-   * check their wait condition again. Useful when switching from blocking to
-   * non-blocking calls to the circular queue.
-   * For example: we set this to true when shutting down the graph_workers.
-   * @param    block is true if we should turn on non-blocking operations
-   *           and false if we should turn them off.
-   */
-  void set_non_block(bool block);
-
-  /*
-   * Access the size of a leaf gutter through the GutteringSystem abstract class
-   */
-  int upds_per_gutter() { return bytes_size / sizeof(node_id_t); }
 };

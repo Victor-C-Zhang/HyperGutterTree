@@ -3,54 +3,67 @@
 #include <mutex>
 #include <utility>
 #include <atomic>
-
-struct queue_elm {
-  bool dirty;      // is this queue element yet to be processed by sketching (if so do not overwrite)
-  bool touched;    // have we peeked at this item (if so do not peek it again)
-  uint32_t size;   // the size of this data element (in bytes)
-  char *data;      // a pointer to the data
-};
-
-/*
- * The Work Queue: A circular queue of data elements.
- * Used by the buffering systems to place data which is ready to be processed.
- * Has a finite size and will block operations which do not have what they
- * need need (either empty or full for peek and push respectively)
- */
+#include <vector>
+#include "types.h"
 
 class WorkQueue {
-public:
-  WorkQueue(int num_elements, int size_of_elm);
+ public:
+  class DataNode {
+   private:
+    // LL next pointer
+    DataNode *next = nullptr;
+    node_id_t node_idx = 0;
+    std::vector<node_id_t> data_vec;
+
+    DataNode(const size_t vec_size) {
+      data_vec.reserve(vec_size);
+    }
+
+    friend class WorkQueue;
+   public:
+    node_id_t get_node_idx() { return node_idx; }
+    std::vector<node_id_t> get_data_vec() { return data_vec; }
+  };
+
+  /*
+   * Construct a work queue
+   * @param num_elements  the number of queue slots
+   * @param max_elm_size  the maximum size of a data element
+   */
+  WorkQueue(int num_elements, int max_elm_size);
   ~WorkQueue();
 
   /* 
    * Add a data element to the queue
-   * @param   elm the data to be placed into the queue
-   * @param   size the number of bytes in elm
+   * @param node_idx  the graph node id these updates are associated with
+   * @param data_vec  vector of updates
+   *
    */
-  void push(char *elm, int size);              
-  
+  void push(node_id_t node_idx, std::vector<node_id_t> &upd_vec);
+
   /* 
    * Get data from the queue for processing
-   * @param   ret where the data from the work queue should be placed
+   * @param data   where to place the Data
    * @return  true if we were able to get good data, false otherwise
    */
-  bool peek(std::pair<int, queue_elm> &ret);
+  bool peek(DataNode *&data);
+
+  /*
+   * Wait until the work queue has enough items in it to satisfy the request and then
+   * @param node_vec     where to place the batch of Data
+   * @param batch_size   the amount of Data requested
+   * return true if able to get good data, false otherwise
+   */
+  bool peek_batch(std::vector<DataNode *> &node_vec, int batch_size);
   
   /* 
-   * Mark a queue element as ready to be overwritten.
-   * Call pop after processing the data from peek.
-   * @param   i is the position of the queue_elm which should be popped
+   * After processing data taken from the work queue call this function
+   * to mark the node as ready to be overwritten
+   * @param data   the LL node that we have finished processing
    */
-  void pop(int i);
+  void peek_callback(DataNode *data);
 
-  std::condition_variable wq_full;
-  std::condition_variable wq_empty;
-  std::mutex rw_lock;
-
-  // should WorkQueue peeks wait until they can succeed(false)
-  // or return false on failure (true)
-  std::atomic<bool> no_block;
+  void set_non_block(bool _block);
 
   /*
    * Function which prints the work queue
@@ -59,26 +72,40 @@ public:
   void print();
 
   // functions for checking if the queue is empty or full
-  inline bool full()     {return queue_array[head].dirty;} // if the next data item is dirty then full
-  // if place to read from is clean and has not been peeked already then queue is empty
-  inline bool empty()    {return !queue_array[tail].dirty || queue_array[tail].touched;}
+  inline bool full()    {return producer_list == nullptr;} // if producer queue empty, wq full
+  inline bool empty()   {return consumer_list == nullptr;} // if consumer queue empty, wq empty
+
 private:
-  int32_t len;      // maximum number of data elements to be stored in the queue
-  int32_t elm_size; // size of an individual element in bytes
+  DataNode *producer_list = nullptr; // list of nodes ready to be written to
+  DataNode *consumer_list = nullptr; // list of nodes with data for reading
 
-  int head;     // where to push (starts at 0, write pointer)
-  int tail;     // where to peek (starts at 0, read pointer)
-  
-  queue_elm *queue_array; // array queue_elm metadata
-  char *data_array;       // the actual data
+  const int len;
+  const int max_elm_size;
 
-  // increment the head or tail pointer
-  inline int incr(int p) {return (p + 1) % len;}
+  // locks and condition variables for producer list
+  std::condition_variable producer_condition;
+  std::mutex producer_list_lock;
+
+  // locks and condition variables for consumer list
+  std::condition_variable consumer_condition;
+  std::mutex consumer_list_lock;
+  size_t consumer_list_size; // size of consumer list for peek_batch
+
+  // should WorkQueue peeks wait until they can succeed(false)
+  // or return false on failure (true)
+  bool non_block;
 };
 
 class WriteTooBig : public std::exception {
+private:
+  const int elm_size;
+  const int max_size;
+
 public:
-  virtual const char * what() const throw() {
-    return "Write to work queue is too big";
+  WriteTooBig(int elm_size, int max_size) : elm_size(elm_size), max_size(max_size) {}
+
+  virtual const char *what() const throw() {
+    return ("WQ: Write is too big " + std::to_string(elm_size) + " > " + 
+      std::to_string(max_size)).c_str();
   }
 };

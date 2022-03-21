@@ -8,17 +8,9 @@
  */
 class StandAloneGutters : public GutteringSystem {
 private:
-  uint32_t buffer_size; // size of a buffer (including metadata)
-  WorkQueue *wq;
   std::vector<std::vector<node_id_t>> buffers; // array dump of numbers for performance:
                                                // DO NOT try to access directly!
 
-  /**
-   * Flushes the corresponding buffer to the queue.
-   * @param buffer      a pointer to the head of the buffer to flush.
-   * @param num_bytes   the number of bytes to flush.
-   */
-  void flush(std::vector<node_id_t> &buffer, uint32_t num_bytes);
 public:
   /**
    * Constructs a new .
@@ -28,8 +20,6 @@ public:
    */
   StandAloneGutters(node_id_t nodes, int workers);
 
-  ~StandAloneGutters();
-
   /**
    * Puts an update into the data structure.
    * @param upd the edge update.
@@ -38,32 +28,8 @@ public:
   insert_ret_t insert(const update_t &upd);
 
   /**
-   * Ask the buffer queue for data and sleep if necessary until it is available.
-   * @param data        to store the fetched data.
-   * @return            true if got valid data, false if unable to get data.
-   */
-  bool get_data(data_ret_t& data);
-
-  /**
    * Flushes all pending buffers.
    * @return nothing.
    */
   flush_ret_t force_flush();
-
-  /**
-   * Notifies all threads waiting on condition variables that they should
-   * check their wait condition again. Useful when switching from blocking to
-   * non-blocking calls to the circular queue.
-   * For example: we set this to true when shutting down the graph_workers.
-   * @param    block is true if we should turn on non-blocking operations
-   *           and false if we should turn them off.
-   */
-  void set_non_block(bool block);
-
-  /*
-   * Access the size of a leaf gutter through the GutteringSystem abstract class
-   */
-  int upds_per_gutter() { return buffer_size / sizeof(node_id_t); }
-
-  static const uint32_t serial_update_size = sizeof(node_id_t);
 };
