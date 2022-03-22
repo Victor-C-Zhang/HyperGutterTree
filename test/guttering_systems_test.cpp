@@ -76,8 +76,8 @@ static void batch_querier(GutteringSystem *gts, int nodes, int batch_size) {
           ASSERT_EQ(nodes - (key + 1), upd) << "key " << key;
           upd_processed += 1;
         }
-        gts->get_data_callback(data);
       }
+      gts->get_data_batched_callback(data_vec);
     }
     else if(shutdown)
       return;

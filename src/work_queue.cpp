@@ -5,19 +5,19 @@
 #include <chrono>
 #include <cassert>
 
-WorkQueue::WorkQueue(int q_len, int max_elm_size) : len(q_len), max_elm_size(max_elm_size) {
+WorkQueue::WorkQueue(size_t q_len, size_t max_elm_size) : len(q_len), max_elm_size(max_elm_size) {
   non_block = false;
 
   // place all nodes of linked list in the producer queue and reserve
   // memory for the vectors
-  for (int i = 0; i < len; i++) {
+  for (size_t i = 0; i < len; i++) {
     DataNode *node = new DataNode(max_elm_size); // create and reserve space for updates
     node->next = producer_list; // next of node is head
     producer_list = node; // set head to new node
   }
   consumer_list_size = 0;
 
-  printf("WQ: created work queue with %i elements each of size %i\n", len, max_elm_size);
+  printf("WQ: created work queue with %lu elements each of size %lu\n", len, max_elm_size);
 }
 
 WorkQueue::~WorkQueue() {
@@ -94,7 +94,7 @@ bool WorkQueue::peek(DataNode *&data) {
   return true;
 }
 
-bool WorkQueue::peek_batch(std::vector<DataNode *> &node_vec, int batch_size) {
+bool WorkQueue::peek_batch(std::vector<DataNode *> &node_vec, size_t batch_size) {
   assert(batch_size <= len); // cannot request a batch bigger than the work queue
 
   node_vec.clear(); // clear out any old data
@@ -114,7 +114,7 @@ bool WorkQueue::peek_batch(std::vector<DataNode *> &node_vec, int batch_size) {
   }
 
   // pull data from head of consumer_list
-  for(int i = 0; i < batch_size; i++) {
+  for(size_t i = 0; i < batch_size; i++) {
     if (consumer_list == nullptr) break; // if non_block is true may not be able to get full batch
 
     node_vec.push_back(consumer_list);
@@ -134,6 +134,20 @@ void WorkQueue::peek_callback(DataNode *node) {
   producer_list_lock.unlock();
   producer_condition.notify_one();
   // printf("WQ: Callback done\n");
+}
+
+void WorkQueue::peek_batch_callback(const std::vector<DataNode *> &node_vec) {
+  for (size_t i = 1; i < node_vec.size(); i++) {
+    node_vec[i-1]->next = node_vec[i]; // fix next pointers just to be sure
+  }
+  DataNode *head = node_vec[0];
+  DataNode *tail = node_vec[node_vec.size() - 1];
+
+  producer_list_lock.lock();
+  tail->next = producer_list;
+  producer_list = head;
+  producer_list_lock.unlock();
+  producer_condition.notify_all(); // we've probably added a bunch of stuff
 }
 
 void WorkQueue::set_non_block(bool _block) {
