@@ -30,7 +30,7 @@ class CacheGutterTree : public GutteringSystem {
   struct CacheGutterTreeConfig {
     const size_t numLevels;
     const size_t bufferSize;
-    WorkQueue *wq;
+    WorkQueue &wq;
   };
 
   class CacheGutterTreeNode {

@@ -18,12 +18,6 @@ private:
                                                // DO NOT try to access directly!
 
   /**
-   * Flushes the corresponding buffer to the queue.
-   * @param gutter      a pointer to the head of the gutter to flush.
-   * @param num_bytes   the number of bytes to flush.
-   */
-  void flush(node_id_t node_idx, std::vector<node_id_t> &buffer);
-  /**
    * Use buffering.conf configuration file to determine parameters of the StandAloneGutters
    * Sets the following variables
    * Queue_Factor :   The number of queue slots per worker removing data from the queue
