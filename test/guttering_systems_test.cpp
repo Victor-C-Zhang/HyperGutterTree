@@ -373,7 +373,6 @@ TEST(GutterTreeTests, EvilInsertions) {
   delete gt;
 }
 
-
 TEST(GutterTreeTests, ParallelInsert) {
   // fairly large number of updates and small buffers
   // to create a large number of flushes from root buffers
@@ -413,3 +412,18 @@ TEST(GutterTreeTests, ParallelInsert) {
   delete gt;
 }
 
+
+TEST(StandaloneTest, ParallelInserts) {
+  const int nodes = 32;
+  const int num_updates = 1000000;
+  const int data_workers = 4;
+  const int nthreads = 10;
+
+  // Guttering System configuration
+  GutterConfig conf;
+  conf.buffer_exp = 20;
+  conf.branch = 2;
+  conf.write();
+
+  run_test(nodes, num_updates, data_workers, STANDALONE, nthreads);
+}

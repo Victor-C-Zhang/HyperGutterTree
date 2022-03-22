@@ -17,12 +17,6 @@ private:
   std::vector<Gutter> gutters; // array dump of numbers for performance:
                                                // DO NOT try to access directly!
 
-  /**
-   * Use buffering.conf configuration file to determine parameters of the StandAloneGutters
-   * Sets the following variables
-   * Queue_Factor :   The number of queue slots per worker removing data from the queue
-   * Size_Factor  :   Decrease the amount of bytes used per node by this multiplicative factor
-   */
 public:
   /**
    * Constructs a new .
