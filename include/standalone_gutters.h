@@ -8,7 +8,13 @@
  */
 class StandAloneGutters : public GutteringSystem {
 private:
-  std::vector<std::vector<node_id_t>> buffers; // array dump of numbers for performance:
+  struct Gutter
+  { 
+    std::mutex mux;
+    std::vector<node_id_t> buffer;
+  };
+  uint32_t buffer_size; // size of a buffer (including metadata)
+  std::vector<Gutter> gutters; // array dump of numbers for performance:
                                                // DO NOT try to access directly!
 
 public:

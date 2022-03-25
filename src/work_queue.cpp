@@ -102,6 +102,7 @@ bool WorkQueue::peek_batch(std::vector<DataNode *> &node_vec, int batch_size) {
 
   // wait until consumer queue is large enough
   std::unique_lock<std::mutex> lk(consumer_list_lock);
+  //FIXME: This version of batch waiting causes a lot of contention on the mutex.
   consumer_condition.wait(lk, 
     [this, batch_size]{return consumer_list_size >= batch_size || non_block;});
 

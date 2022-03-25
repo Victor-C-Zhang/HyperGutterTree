@@ -92,8 +92,8 @@ INSTANTIATE_TEST_SUITE_P(GutteringTestSuite, GuttersTest, testing::Values(GUTTRE
 // this test only works if the depth of the tree does not exceed 1
 // and no work is claimed off of the work queue
 // to work correctly num_updates must be a multiple of nodes
-static void run_test(const int nodes, const int num_updates, const int data_workers, 
- const SystemEnum gts_enum) {
+static void run_test(const int nodes, const int num_updates, const int data_workers,
+ const SystemEnum gts_enum, const int nthreads=1) {
   GutteringSystem *gts;
   std::string system_str;
   if (gts_enum == GUTTREE) {
@@ -118,12 +118,28 @@ static void run_test(const int nodes, const int num_updates, const int data_work
   for (int t = 0; t < data_workers; t++)
     query_threads[t] = std::thread(querier, gts, nodes);
 
-  for (int i = 0; i < num_updates; i++) {
-    update_t upd;
-    upd.first = i % nodes;
-    upd.second = (nodes - 1) - (i % nodes);
-    gts->insert(upd);
-  }
+  // In case there are multiple threads
+  std::vector<std::thread> threads;
+  threads.reserve(nthreads);
+  // This is the work to do per thread (rounded up)
+  const int work_per = (num_updates+nthreads-1) / nthreads;
+
+  auto task = [&](const int j){
+    for (int i = j * work_per; i < (j+1) * work_per && i < num_updates; i++) {
+      update_t upd;
+      upd.first = i % nodes;
+      upd.second = (nodes - 1) - (i % nodes);
+      gts->insert(upd);
+    }
+  };
+
+  //Spin up then join threads
+  for (int j = 0; j < nthreads; j++)
+    threads.emplace_back(task, j);
+  for (int j = 0; j < nthreads; j++)
+    threads[j].join();
+
+
   printf("force flush\n");
   gts->force_flush();
   shutdown = true;
@@ -357,7 +373,6 @@ TEST(GutterTreeTests, EvilInsertions) {
   delete gt;
 }
 
-
 TEST(GutterTreeTests, ParallelInsert) {
   // fairly large number of updates and small buffers
   // to create a large number of flushes from root buffers
@@ -397,3 +412,12 @@ TEST(GutterTreeTests, ParallelInsert) {
   delete gt;
 }
 
+
+TEST(StandaloneTest, ParallelInserts) {
+  const int nodes = 32;
+  const int num_updates = 1000000;
+  const int data_workers = 4;
+  const int nthreads = 10;
+
+  run_test(nodes, num_updates, data_workers, STANDALONE, nthreads);
+}

@@ -25,51 +25,74 @@ void write_configuration(int queue_factor, int gutter_factor) {
   conf << "gutter_factor=" << gutter_factor << std::endl;
 }
 
-void run_test(const int nodes, const unsigned long updates) {
+void run_test(const int nodes, const unsigned long updates, const unsigned int nthreads=1) {
   shutdown = false;
-
   write_configuration(2, 1); // 2 is queue_factor, 1 is gutter_factor
-  StandAloneGutters *wq = new StandAloneGutters(nodes, 40); // 40 is num workers
+  StandAloneGutters *gutters = new StandAloneGutters(nodes, 40); // 40 is num workers
 
   // create queriers
   std::thread query_threads[40];
   for (int t = 0; t < 40; t++) {
-    query_threads[t] = std::thread(querier, wq);
+    query_threads[t] = std::thread(querier, gutters);
   }
+
+  std::vector<std::thread> threads;
+  threads.reserve(nthreads);
+  const unsigned long work_per = (updates + (nthreads-1)) / nthreads;
+  printf("work per thread: %lu\n", work_per);
+
+  auto task = [&](const unsigned int j){
+    for (unsigned long i = j * work_per; i < (j+1) * work_per && i < updates; i++) 
+    {
+      if(i % 1000000000 == 0)
+        printf("processed so far: %lu\n", i);
+      update_t upd;
+      upd.first = i % nodes;
+      upd.second = (nodes - 1) - (i % nodes);
+      gutters->insert(upd);
+      std::swap(upd.first, upd.second);
+      gutters->insert(upd);
+    }
+  };
 
   auto start = std::chrono::steady_clock::now();
-  for (uint64_t i = 0; i < updates; i++) {
-    if(i % 1000000000 == 0)
-      printf("processed so far: %lu\n", i);
-    
-    update_t upd;
-    upd.first = i % nodes;
-    upd.second = (nodes - 1) - (i % nodes);
-    wq->insert(upd);
-    std::swap(upd.first, upd.second);
-    wq->insert(upd);
-  }
-  wq->force_flush();
-  shutdown = true;
-  wq->set_non_block(true);
+  //Spin up then join threads
+  for (unsigned int j = 0; j < nthreads; j++)
+    threads.emplace_back(task, j);
+  for (unsigned int j = 0; j < nthreads; j++)
+    threads[j].join();
 
+  gutters->force_flush();
+  shutdown = true;
+  gutters->set_non_block(true); // switch to non-blocking calls in an effort to exit
+  
   std::chrono::duration<double> delta = std::chrono::steady_clock::now() - start;
   printf("Insertions took %f seconds: average rate = %f\n", delta.count(), updates/delta.count());
 
-  for (int i = 0; i < 40; i++) {
-    query_threads[i].join();
-  }
-  delete wq;
+  for (int t = 0; t < 40; t++)
+    query_threads[t].join();
+  delete gutters;
 }
 
-TEST(SA_Throughput, kron15) {
-  run_test(8192, 17542263);
+TEST(SA_Throughput, kron15_10threads) {
+  run_test(8192, 17542263, 10);
 }
 
-TEST(SA_Throughput, kron17) {
-  run_test(131072, 4474931789);
+TEST(SA_Throughput, kron15_20threads) {
+  run_test(8192, 17542263, 20);
 }
 
-TEST(SA_Throughput, kron18) {
-  run_test(262144, 17891985703);
+TEST(SA_Throughput, kron17_10threads) {
+  run_test(131072, 4474931789, 10);
+}
+
+TEST(SA_Throughput, kron17_20threads) {
+  run_test(131072, 4474931789, 20);
+}
+
+TEST(SA_Throughput, kron18_10threads) {
+  run_test(262144, 17891985703, 10);
+}
+TEST(SA_Throughput, kron18_20threads) {
+  run_test(262144, 17891985703, 20);
 }

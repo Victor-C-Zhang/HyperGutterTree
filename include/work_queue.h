@@ -22,7 +22,7 @@ class WorkQueue {
     friend class WorkQueue;
    public:
     node_id_t get_node_idx() { return node_idx; }
-    std::vector<node_id_t> get_data_vec() { return data_vec; }
+    const std::vector<node_id_t>& get_data_vec() { return data_vec; }
   };
 
   /*
