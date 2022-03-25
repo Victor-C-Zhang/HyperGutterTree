@@ -419,11 +419,5 @@ TEST(StandaloneTest, ParallelInserts) {
   const int data_workers = 4;
   const int nthreads = 10;
 
-  // Guttering System configuration
-  GutterConfig conf;
-  conf.buffer_exp = 20;
-  conf.branch = 2;
-  conf.write();
-
   run_test(nodes, num_updates, data_workers, STANDALONE, nthreads);
 }
