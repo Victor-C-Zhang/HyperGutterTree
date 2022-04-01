@@ -30,7 +30,7 @@ class WorkQueue {
    * @param num_elements  the number of queue slots
    * @param max_elm_size  the maximum size of a data element
    */
-  WorkQueue(int num_elements, int max_elm_size);
+  WorkQueue(size_t num_elements, size_t max_elm_size);
   ~WorkQueue();
 
   /* 
@@ -54,7 +54,7 @@ class WorkQueue {
    * @param batch_size   the amount of Data requested
    * return true if able to get good data, false otherwise
    */
-  bool peek_batch(std::vector<DataNode *> &node_vec, int batch_size);
+  bool peek_batch(std::vector<DataNode *> &node_vec, size_t batch_size);
   
   /* 
    * After processing data taken from the work queue call this function
@@ -62,6 +62,11 @@ class WorkQueue {
    * @param data   the LL node that we have finished processing
    */
   void peek_callback(DataNode *data);
+
+  /*
+   * A batched version of peek_callback that avoids locking on every DataNode
+   */
+  void peek_batch_callback(const std::vector<DataNode *> &node_vec);
 
   void set_non_block(bool _block);
 
@@ -79,8 +84,8 @@ private:
   DataNode *producer_list = nullptr; // list of nodes ready to be written to
   DataNode *consumer_list = nullptr; // list of nodes with data for reading
 
-  const int len;
-  const int max_elm_size;
+  const size_t len;
+  const size_t max_elm_size;
 
   // locks and condition variables for producer list
   std::condition_variable producer_condition;

@@ -26,10 +26,12 @@ public:
   }
 
   // get data out of the guttering system either one gutter at a time or in a batched fashion
-  bool get_data_batched(std::vector<WorkQueue::DataNode *> &batched_data, int batch_size) 
-    { return wq.peek_batch(batched_data, batch_size); }
   bool get_data(WorkQueue::DataNode *&data) { return wq.peek(data); }
   void get_data_callback(WorkQueue::DataNode *data) { wq.peek_callback(data); }
+  bool get_data_batched(std::vector<WorkQueue::DataNode *> &batched_data, int batch_size) 
+    { return wq.peek_batch(batched_data, batch_size); }
+  void get_data_batched_callback(const std::vector<WorkQueue::DataNode *> &batched_data)
+    { wq.peek_batch_callback(batched_data); }
   void set_non_block(bool block) { wq.set_non_block(block);} //set non-blocking calls in wq
 protected:
   /*
