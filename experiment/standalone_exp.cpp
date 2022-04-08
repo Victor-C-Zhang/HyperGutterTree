@@ -28,7 +28,7 @@ void write_configuration(int queue_factor, int gutter_factor) {
 void run_test(const int nodes, const unsigned long updates, const unsigned int nthreads=1) {
   shutdown = false;
   write_configuration(2, 1); // 2 is queue_factor, 1 is gutter_factor
-  StandAloneGutters *gutters = new StandAloneGutters(nodes, 40); // 40 is num workers
+  StandAloneGutters *gutters = new StandAloneGutters(nodes, 40, nthreads); // 40 is num workers
 
   // create queriers
   std::thread query_threads[40];
@@ -49,9 +49,9 @@ void run_test(const int nodes, const unsigned long updates, const unsigned int n
       update_t upd;
       upd.first = i % nodes;
       upd.second = (nodes - 1) - (i % nodes);
-      gutters->insert(upd);
+      gutters->insert(upd, j);
       std::swap(upd.first, upd.second);
-      gutters->insert(upd);
+      gutters->insert(upd, j);
     }
   };
 
