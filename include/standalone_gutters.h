@@ -13,12 +13,18 @@ private:
     std::mutex mux;
     std::vector<node_id_t> buffer;
   };
+  static constexpr uint8_t local_buf_size = 16;
+  struct LocalGutter
+  {
+		uint8_t count = 0;
+    node_id_t buffer[local_buf_size];
+  };
   uint32_t buffer_size; // size of a buffer (including metadata)
   std::vector<Gutter> gutters; // array dump of numbers for performance:
                                                // DO NOT try to access directly!
   const uint32_t inserters;
-  std::vector<std::vector<Gutter>> local_buffers; // array dump of numbers for performance:
-  const size_t local_buf_size = 32;
+  std::vector<std::vector<LocalGutter>> local_buffers; // array dump of numbers for performance:
+  
   
   /**
    * Puts an update into the data structure from the local buffer. Must hold both buffer locks
