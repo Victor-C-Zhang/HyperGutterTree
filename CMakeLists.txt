@@ -81,6 +81,7 @@ target_link_libraries(GutterTree PUBLIC gtest GraphZeppelinCommon)
 # different OSes have different ways of efficiently pre-allocating large files
 if (UNIX AND NOT APPLE)
   message(STATUS "Enabling Fallocate for a linux system")
+  target_link_options(GutterTree PUBLIC -fopenmp)
   target_compile_options(GutterTree PRIVATE -DLINUX_FALLOCATE)
 elseif(WIN32)
   message(STATUS "Using fileapi for Windows")

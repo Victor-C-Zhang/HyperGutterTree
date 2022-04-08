@@ -102,7 +102,7 @@ static void run_test(const int nodes, const int num_updates, const int data_work
   }
   else if (gts_enum == STANDALONE) {
     system_str = "StandAloneGutters";
-    gts = new StandAloneGutters(nodes, data_workers);
+    gts = new StandAloneGutters(nodes, data_workers, nthreads);
   }
   else {
     printf("Did not recognize gts_enum!\n");
@@ -129,7 +129,7 @@ static void run_test(const int nodes, const int num_updates, const int data_work
       update_t upd;
       upd.first = i % nodes;
       upd.second = (nodes - 1) - (i % nodes);
-      gts->insert(upd);
+      gts->insert(upd, j);
     }
   };
 
@@ -192,6 +192,20 @@ TEST_P(GuttersTest, ManyInserts) {
   conf.write();
 
   run_test(nodes, num_updates, data_workers, GetParam());
+}
+
+TEST(GuttersTest, ManyInsertsParallel) {
+  const int nodes = 32;
+  const int num_updates = 1000000;
+  const int data_workers = 4;
+
+  // Guttering System configuration
+  GutterConfig conf;
+  conf.buffer_exp = 20;
+  conf.branch = 2;
+  conf.write();
+
+  run_test(nodes, num_updates, data_workers, STANDALONE, 10);
 }
 
 TEST_P(GuttersTest, TinyGutters) {
