@@ -81,7 +81,7 @@ target_link_libraries(GutterTree PUBLIC gtest GraphZeppelinCommon)
 # different OSes have different ways of efficiently pre-allocating large files
 if (UNIX AND NOT APPLE)
   message(STATUS "Enabling Fallocate for a linux system")
-  target_compile_options(GutterTree PRIVATE -DLINUX_FALLOCATE)
+  target_compile_options(GutterTree PRIVATE -fopenmp -DLINUX_FALLOCATE)
 elseif(WIN32)
   message(STATUS "Using fileapi for Windows")
   target_compile_options(GutterTree PRIVATE -DWINDOWS_FILEAPI)
@@ -98,10 +98,12 @@ if (BUILD_EXE)
     # test/cache_gutter_tree_test.cpp
   )
   target_link_libraries(buffering_tests PRIVATE GutterTree)
+	target_link_options(buffering_tests PUBLIC -fopenmp)
 
   add_executable(buffering_experiment
     experiment/runner.cpp
   #   experiment/gutter_tree_exp.cpp
     experiment/standalone_exp.cpp)
   target_link_libraries(buffering_experiment PRIVATE GutterTree)
+	target_link_options(buffering_experiment PUBLIC -fopenmp)
 endif()

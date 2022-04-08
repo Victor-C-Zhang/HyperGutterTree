@@ -44,6 +44,7 @@ insert_ret_t StandAloneGutters::insert_batch(int which, node_id_t gutterid) {
 }
 
 flush_ret_t StandAloneGutters::force_flush() {
+#pragma omp parallel for
   for (node_id_t node_idx = 0; node_idx < gutters.size(); node_idx++) {
     const std::lock_guard<std::mutex> lock(gutters[node_idx].mux);
     for (uint32_t which = 0; which < inserters; which++)
