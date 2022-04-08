@@ -8,7 +8,7 @@
 #include <thread>
 
 class GutterTree;
-class flush_struct;
+struct flush_struct;
 
 class BufferFlusher {
 public:

@@ -84,7 +84,7 @@ if (UNIX AND NOT APPLE)
   target_compile_options(GutterTree PRIVATE -fopenmp -DLINUX_FALLOCATE)
 elseif(WIN32)
   message(STATUS "Using fileapi for Windows")
-  target_compile_options(GutterTree PRIVATE -DWINDOWS_FILEAPI)
+  target_compile_options(GutterTree PRIVATE -fopenmp -DWINDOWS_FILEAPI)
 else()
   message(STATUS "Using fcntl for an Apple or other unknown system")
   target_compile_options(GutterTree PRIVATE -DPOSIX_FCNTL)
@@ -98,12 +98,17 @@ if (BUILD_EXE)
     # test/cache_gutter_tree_test.cpp
   )
   target_link_libraries(buffering_tests PRIVATE GutterTree)
-	target_link_options(buffering_tests PUBLIC -fopenmp)
 
   add_executable(buffering_experiment
     experiment/runner.cpp
   #   experiment/gutter_tree_exp.cpp
     experiment/standalone_exp.cpp)
   target_link_libraries(buffering_experiment PRIVATE GutterTree)
-	target_link_options(buffering_experiment PUBLIC -fopenmp)
+	if (UNIX AND NOT APPLE)
+		target_link_options(buffering_tests PUBLIC -fopenmp)
+		target_link_options(buffering_experiment PUBLIC -fopenmp)
+	elseif(WIN32)
+		target_link_options(buffering_tests PUBLIC -fopenmp)
+		target_link_options(buffering_experiment PUBLIC -fopenmp)
+	endif ()
 endif()
