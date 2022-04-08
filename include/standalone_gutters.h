@@ -13,7 +13,7 @@ private:
     std::mutex mux;
     std::vector<node_id_t> buffer;
   };
-  static constexpr uint8_t local_buf_size = 16;
+  static constexpr uint8_t local_buf_size = 8;
   struct LocalGutter
   {
 		uint8_t count = 0;
