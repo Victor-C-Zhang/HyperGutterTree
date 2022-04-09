@@ -244,7 +244,7 @@ TEST_P(GuttersTest, FlushAndInsertAgain) {
   }
   else if (gts_enum == STANDALONE) {
     system_str = "StandAloneGutters";
-    gts = new StandAloneGutters(nodes, data_workers);
+    gts = new StandAloneGutters(nodes, data_workers, 1);
   }
   else {
     printf("Did not recognize gts_enum!\n");
@@ -302,7 +302,7 @@ TEST_P(GuttersTest, GetDataBatched) {
   }
   else if (gts_enum == STANDALONE) {
     system_str = "StandAloneGutters";
-    gts = new StandAloneGutters(nodes, data_workers);
+    gts = new StandAloneGutters(nodes, data_workers, 1);
   }
   else {
     printf("Did not recognize gts_enum!\n");

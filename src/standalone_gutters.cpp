@@ -1,6 +1,7 @@
 #include <cassert>
 #include <fstream>
 #include "../include/standalone_gutters.h"
+#include <omp.h>
 
 StandAloneGutters::StandAloneGutters(node_id_t num_nodes, uint32_t workers, uint32_t inserters) : GutteringSystem(num_nodes, workers), gutters(num_nodes), inserters(inserters) 
 {
@@ -44,7 +45,7 @@ insert_ret_t StandAloneGutters::insert_batch(int which, node_id_t gutterid) {
 }
 
 flush_ret_t StandAloneGutters::force_flush() {
-#pragma omp parallel for
+#pragma omp parallel for num_threads(omp_get_max_threads() / 2)
   for (node_id_t node_idx = 0; node_idx < gutters.size(); node_idx++) {
     const std::lock_guard<std::mutex> lock(gutters[node_idx].mux);
     for (uint32_t which = 0; which < inserters; which++)

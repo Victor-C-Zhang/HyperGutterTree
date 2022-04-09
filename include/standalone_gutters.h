@@ -35,13 +35,13 @@ private:
 
 public:
   /**
-   * Constructs a new .
+   * Constructs a new guttering systems using only leaf gutters.
    * @param size        the total length of a buffer, in updates.
    * @param nodes       number of nodes in the graph.
    * @param workers     the number of workers which will be removing batches
-   * @param inserters     the number of inserter buffers
+   * @param inserters   the number of inserter buffers
    */
-  StandAloneGutters(node_id_t nodes, uint32_t workers, uint32_t inserters=1);
+  StandAloneGutters(node_id_t nodes, uint32_t workers, uint32_t inserters);
 
   /**
    * Puts an update into the data structure.
