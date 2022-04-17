@@ -13,7 +13,7 @@ StandAloneGutters::StandAloneGutters(node_id_t num_nodes, uint32_t workers, uint
   }
 }
 
-insert_ret_t StandAloneGutters::insert(const update_t &upd, int which) {
+insert_ret_t StandAloneGutters::insert(const update_tt &upd, int which) {
   LocalGutter &lgutter = local_buffers[which][upd.first];
 	lgutter.buffer[lgutter.count++] = upd.second;
   if (lgutter.count == local_buf_size) { // full, so request flush
@@ -22,7 +22,7 @@ insert_ret_t StandAloneGutters::insert(const update_t &upd, int which) {
 		lgutter.count = 0;
   }
 }
-insert_ret_t StandAloneGutters::insert(const update_t &upd) {
+insert_ret_t StandAloneGutters::insert(const update_tt &upd) {
   insert(upd, 0);
 }
 
@@ -30,10 +30,9 @@ insert_ret_t StandAloneGutters::insert(const update_t &upd) {
 insert_ret_t StandAloneGutters::insert_batch(int which, node_id_t gutterid) {
   Gutter &gutter = gutters[gutterid];
   LocalGutter &lgutter = local_buffers[which][gutterid];
-  std::vector<node_id_t> &ptr = gutter.buffer;
+  auto& ptr = gutter.buffer;
 
-  for (size_t i = 0; i < lgutter.count; i++)
-  {
+  for (size_t i = 0; i < lgutter.count; i++) {
     ptr.push_back(lgutter.buffer[i]);
     if (ptr.size() == leaf_gutter_size) { // full, so request flush
       wq.push(gutterid, ptr);

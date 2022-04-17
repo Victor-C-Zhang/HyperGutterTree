@@ -13,7 +13,7 @@ class WorkQueue {
     // LL next pointer
     DataNode *next = nullptr;
     node_id_t node_idx = 0;
-    std::vector<node_id_t> data_vec;
+    std::vector<delta_update_t> data_vec;
 
     DataNode(const size_t vec_size) {
       data_vec.reserve(vec_size);
@@ -22,7 +22,7 @@ class WorkQueue {
     friend class WorkQueue;
    public:
     node_id_t get_node_idx() { return node_idx; }
-    const std::vector<node_id_t>& get_data_vec() { return data_vec; }
+    const std::vector<delta_update_t>& get_data_vec() { return data_vec; }
   };
 
   /*
@@ -39,7 +39,7 @@ class WorkQueue {
    * @param data_vec  vector of updates
    *
    */
-  void push(node_id_t node_idx, std::vector<node_id_t> &upd_vec);
+  void push(node_id_t node_idx, std::vector<delta_update_t> &upd_vec);
 
   /* 
    * Get data from the queue for processing

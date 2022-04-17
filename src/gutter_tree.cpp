@@ -17,6 +17,9 @@
  */
 GutterTree::GutterTree(std::string dir, node_id_t nodes, int workers, bool reset=false) 
 : GutteringSystem(nodes, workers, true), dir(dir), num_nodes(nodes) {
+  throw std::runtime_error("Gutter tree does not (yet) support hypergraphs. "
+                           "Use standalone gutters instead.");
+
   if (buffer_size < page_size) {
     printf("WARNING: requested buffer size smaller than page_size. Set to page_size.\n");
     buffer_size = page_size;

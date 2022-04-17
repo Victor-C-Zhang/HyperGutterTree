@@ -3,6 +3,19 @@
 #include <vector>
 #include <graph_zeppelin_common.h>
 
-typedef std::pair<node_id_t, node_id_t> update_t;
+#ifdef __SIZEOF_INT128__
+typedef __int128 int128_t;
+typedef unsigned __int128 uint128_t;
+#else
+typedef struct {
+  uint64_t low64;
+  uint64_t high64;
+} uint128_t;
+#endif
+
+typedef uint128_t index_t;
+typedef std::pair<int8_t, index_t> delta_update_t;
+typedef std::pair<node_id_t, delta_update_t> update_tt; // node, delta, sketch index
+
 typedef void insert_ret_t;
 typedef void flush_ret_t;

@@ -9,20 +9,22 @@ public:
    leaf_gutter_size((configure_system(), 
       std::max((node_id_t) (gutter_factor * upds_per_sketch(num_nodes)), (node_id_t)1))),
    wq(workers * queue_factor,
-      page_slots ? leaf_gutter_size + page_size / sizeof(node_id_t) : leaf_gutter_size) {}
+      page_slots ? leaf_gutter_size + page_size / sizeof(update_tt::second) :
+      leaf_gutter_size) {}
   
   virtual ~GutteringSystem() {};
-  virtual insert_ret_t insert(const update_t &upd) = 0; //insert an element to the guttering system
-  virtual insert_ret_t insert(const update_t &upd, int which) {insert(upd);(void)(which);}; //discard second argument by default
+  virtual insert_ret_t insert(const update_tt &upd) = 0; //insert an element to the guttering system
+  virtual insert_ret_t insert(const update_tt &upd, int which) {insert(upd); (void)(which);}; //discard second argument by default
   virtual flush_ret_t force_flush() = 0;                //force all data out of buffers
 
   // get the size of a work queue elmement in bytes
   int gutter_size() {
-    return leaf_gutter_size * sizeof(node_id_t);
+    return leaf_gutter_size * sizeof(update_tt::second);
   }
 
   // returns the number of node_id_t types that fit in a sketch
   static size_t upds_per_sketch(node_id_t num_nodes) {
+    // TODO: fix this for 128 bit types
     return 42 * pow(log2(num_nodes), 2) / (log2(3) - 1);
   }
 

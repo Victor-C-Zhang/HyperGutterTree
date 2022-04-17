@@ -11,13 +11,13 @@ private:
   struct Gutter
   { 
     std::mutex mux;
-    std::vector<node_id_t> buffer;
+    std::vector<delta_update_t> buffer;
   };
   static constexpr uint8_t local_buf_size = 8;
   struct LocalGutter
   {
 		uint8_t count = 0;
-    node_id_t buffer[local_buf_size];
+    delta_update_t buffer[local_buf_size];
   };
   uint32_t buffer_size; // size of a buffer (including metadata)
   std::vector<Gutter> gutters; // array dump of numbers for performance:
@@ -48,9 +48,9 @@ public:
    * @param upd the edge update.
    * @return nothing.
    */
-  insert_ret_t insert(const update_t &upd, int which);
+  insert_ret_t insert(const update_tt &upd, int which);
   // pure virtual functions don't like default params
-  insert_ret_t insert(const update_t &upd);
+  insert_ret_t insert(const update_tt &upd);
 
   
   /**
