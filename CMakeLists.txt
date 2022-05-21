@@ -54,7 +54,7 @@ endif()
 FetchContent_Declare(
   GraphZeppelinCommon
 
-  GIT_REPOSITORY  https://github.com/GraphStreamingProject/GraphZeppelinCommon.git
+  GIT_REPOSITORY  https://github.com/Victor-C-Zhang/HyperGraphZeppelinCommon.git
   GIT_TAG         main
 )
 
